@@ -13,7 +13,7 @@ const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v25'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v26'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -1488,44 +1488,45 @@ $('#arquivo-backup').addEventListener('change', async evento => {
 const VARIAVEIS_TEMA = ['--fundo', '--superficie', '--superficie-2', '--texto', '--texto-fraco', '--borda', '--destaque', '--destaque-texto']
 // Cada tema muda só as variáveis de cor, uma versão para o modo claro e outra para o escuro.
 // O tema "Padrão" não muda nada (usa as cores do styles.css).
-// Um tema para cada coleção, com as cores da arte dela. Cada paleta:
+// Um tema para cada coleção. Cada paleta:
 // [fundo, superfície, superfície 2, borda, texto, texto fraco, destaque, texto sobre o destaque (opcional)]
 const montarPaleta = p => ({ '--fundo': p[0], '--superficie': p[1], '--superficie-2': p[2], '--borda': p[3], '--texto': p[4], '--texto-fraco': p[5], '--destaque': p[6], ...(p[7] ? { '--destaque-texto': p[7] } : {}) })
 const temaDoSet = (nome, set, claro, escuro) => ({ nome, set, claro: montarPaleta(claro), escuro: montarPaleta(escuro) })
 const TEMAS = {
 	'padrao': { nome: 'Padrão', claro: { '--fundo': '#f4f5f8', '--superficie': '#ffffff', '--destaque': '#d6342c' }, escuro: { '--fundo': '#14161c', '--superficie': '#1e2129', '--destaque': '#f0524a' }, padrao: true },
-	// Megaevolução: violeta da energia mega
+	// As cores vêm da arte de cada coleção (logo e cartas).
+	// Megaevolução: o logo degradê verde-limão → amarelo, sobre preto
 	'me01': temaDoSet('Megaevolução', 'me01',
-		['#f3effc', '#ffffff', '#e7dff8', '#d8ccf0', '#1d1530', '#62588a', '#7a45d6'],
-		['#110d1c', '#1a1429', '#2a2040', '#3b2f58', '#eee9fb', '#a89fc9', '#a98aff']),
-	// Fogo Fantasmagórico: brasa laranja com sombra arroxeada
+		['#f5f8e4', '#ffffff', '#e8efc4', '#d5e09c', '#1a2108', '#65703a', '#8fb300', '#141a04'],
+		['#0c0f06', '#151a0b', '#222b10', '#344217', '#f0f6d8', '#a4b274', '#c6e82a', '#141a04']),
+	// Fogo Fantasmagórico: chamas roxas e azuis com letras magenta
 	'me02': temaDoSet('Fogo Fantasmagórico', 'me02',
-		['#fdf1ea', '#ffffff', '#f9e0d3', '#f0cdbb', '#2a140d', '#7d5a4d', '#e0521b'],
-		['#190c10', '#251319', '#38202a', '#4f2c3a', '#fbebe6', '#c9a0a6', '#ff7a3d']),
-	// Heróis Excelsos: azul celestial
+		['#f3eefb', '#ffffff', '#e6dcf5', '#d3c3ec', '#1c1030', '#6a5a8f', '#a02fb5'],
+		['#0e0a1f', '#171231', '#241c4a', '#35296b', '#efe9ff', '#a99bd6', '#d65bf0', '#1a0626']),
+	// Heróis Excelsos: letras douradas com contorno escuro
 	'me02.5': temaDoSet('Heróis Excelsos', 'me02.5',
-		['#edf4fd', '#ffffff', '#dce9f9', '#c8dbf2', '#0f1f35', '#52698a', '#2a7de1'],
-		['#0a1424', '#101d33', '#192d4c', '#243f66', '#e8f1fc', '#8ea6c7', '#5aa2ff']),
-	// Equilíbrio Perfeito: verde-água, simetria e calma
+		['#fdf7e0', '#ffffff', '#f8ebb5', '#ecd98a', '#2a2105', '#7a6a2a', '#e8a900', '#1e1802'],
+		['#12100a', '#1d1a0e', '#2e2913', '#443c1b', '#fbf3d2', '#c4b67c', '#ffc933', '#1e1802']),
+	// Equilíbrio Perfeito: preto e branco com borda verde neon
 	'me03': temaDoSet('Equilíbrio Perfeito', 'me03',
-		['#eaf6f4', '#ffffff', '#d9eeea', '#c4e0db', '#0d2523', '#4f7270', '#0f9a8e'],
-		['#09171a', '#0f2428', '#17373b', '#22504f', '#e3f4f2', '#86b1ae', '#34d3c3', '#06201e']),
-	// Caos Ascendente: magenta intenso sobre vinho
+		['#f1f3ef', '#ffffff', '#e2e6dc', '#cdd4c3', '#0d0f0b', '#5a6350', '#2fa31a'],
+		['#050605', '#0e100c', '#181b14', '#272c20', '#f4f6f0', '#9aa48c', '#58e03a', '#04160a']),
+	// Caos Ascendente: azul gelo e respingos de água
 	'me04': temaDoSet('Caos Ascendente', 'me04',
-		['#fcedf4', '#ffffff', '#f7dae8', '#eec3d9', '#2b0d1e', '#80566d', '#c4177d'],
-		['#190a14', '#26111f', '#3a1a30', '#53264a', '#fbe8f3', '#c99ab5', '#ff4fb0', '#2a0618']),
-	// Escuridão Absoluta: abismo quase preto com brilho azul-prata
+		['#eaf5fd', '#ffffff', '#d6eaf9', '#bddcf2', '#0b1f33', '#4f6f8a', '#1388d8'],
+		['#08141f', '#0e2133', '#16344f', '#21496c', '#e6f4ff', '#86abc9', '#38b6ff', '#04182a']),
+	// Escuridão Absoluta (Pitch Black): preto com roxo
 	'me05': temaDoSet('Escuridão Absoluta', 'me05',
-		['#eceef4', '#ffffff', '#dde0ea', '#cacfdd', '#0f1220', '#575d78', '#3c4a8a'],
-		['#000000', '#0a0b12', '#141622', '#232638', '#e9ebf5', '#8a90ab', '#8da2ff', '#080a18']),
-	// Celebração de 30 Anos: amarelo festivo
+		['#f0ecf8', '#ffffff', '#e1d9f0', '#cdc0e4', '#150c26', '#62548a', '#6a2fd0'],
+		['#000000', '#0a0710', '#150f22', '#271c3d', '#ece6fb', '#9588b8', '#9d5cff', '#12062a']),
+	// Celebração de 30 Anos: amarelo do Pikachu e o "30" vermelho
 	'30th': temaDoSet('Celebração de 30 Anos', '30th',
-		['#fdf8e3', '#ffffff', '#f8efc2', '#eddf9c', '#2a2306', '#78692a', '#e8ad00', '#1b1706'],
-		['#17130a', '#231d0e', '#373015', '#4f4520', '#fcf3d0', '#c2b57a', '#ffc926', '#1b1706']),
-	// Coleção Clássica: verde de Game Boy, nostalgia
+		['#fff6dc', '#ffffff', '#fbe6a8', '#f2d27a', '#2b1405', '#85602a', '#e0301e'],
+		['#1b0f08', '#27160c', '#3b2210', '#55331a', '#fff0d6', '#cfa97c', '#ff5a3c', '#2a0804']),
+	// Coleção Clássica: laranja do Charizard, das cartas antigas
 	'30th-c': temaDoSet('Coleção Clássica de 30 Anos', '30th-c',
-		['#eef2e0', '#fbfdf3', '#dfe8c7', '#cbd8aa', '#18200a', '#5b6b3a', '#4f7a1e'],
-		['#0e1307', '#161d0b', '#222d13', '#33421d', '#e9f1d2', '#9aab72', '#a8d23c', '#10180a']),
+		['#fcf1e4', '#ffffff', '#f6dfc4', '#ebc9a0', '#2a1608', '#85624a', '#d9620f'],
+		['#170e08', '#231610', '#36231a', '#4d3322', '#fbeadb', '#c8a58a', '#ff8a3d', '#2a1204']),
 	// Promos MEP: grafite e prata da estrela preta
 	'mep': temaDoSet('Promos MEP', 'mep',
 		['#f0f1f3', '#ffffff', '#e3e5e9', '#d0d3da', '#13151a', '#5c616c', '#454b59'],
@@ -1533,7 +1534,7 @@ const TEMAS = {
 }
 const ORDEM_TEMAS = ['padrao', 'me01', 'me02', 'me02.5', 'me03', 'me04', 'me05', '30th', '30th-c', 'mep', 'personalizado']
 // Temas antigos (v24) → o tema de coleção mais parecido
-const TEMAS_ANTIGOS = { oceano: 'me02.5', floresta: 'me03', 'por-do-sol': 'me02', sakura: 'me04', 'meia-noite': 'me05', eletrico: '30th', mega: 'me01' }
+const TEMAS_ANTIGOS = { oceano: 'me04', floresta: 'me01', 'por-do-sol': '30th-c', sakura: 'me02', 'meia-noite': 'me05', eletrico: 'me02.5', mega: 'me02' }
 const idDoTema = () => { const id = ler(CHAVE_PALETA) || 'padrao'; return TEMAS_ANTIGOS[id] || id }
 
 function modoEscuro(modo) {
