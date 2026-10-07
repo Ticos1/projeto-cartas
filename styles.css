@@ -537,3 +537,14 @@ main {
 
 /* Enquanto o dedo segura a carta */
 .carta.pressionando { transform: scale(.93); }
+
+#zoom-status {
+	display: inline-block;
+	margin: 0 0 4px;
+	padding: 4px 12px;
+	border-radius: 99px;
+	background: rgba(60, 207, 127, .18);
+	color: #3ccf7f;
+	font-weight: 700;
+	font-size: .9rem;
+}

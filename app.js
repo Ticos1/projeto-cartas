@@ -10,7 +10,7 @@ const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v9'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v11'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -219,16 +219,27 @@ function montarGrade(itens, mostrarSet) {
 // Toque = marcar/desmarcar.  Segurar = ver a carta grande.
 // No celular, segurar pode chegar de dois jeitos: pelo nosso cronômetro ou pelo
 // "toque longo" do próprio Android (evento contextmenu). Qualquer um abre a carta.
-const TEMPO_SEGURAR = 450
-const TOLERANCIA_DEDO = 14   // px que o dedo pode tremer sem virar rolagem
+const TEMPO_SEGURAR = 500
+const TOLERANCIA_DEDO = 6   // px que o dedo pode tremer sem virar rolagem
 let toqueLongo = null
 let foiToqueLongo = false
+let inicioDoGestoAberto = null   // onde começou o dedo que abriu a carta (enquanto ainda está na tela)
 
 function abrirPorToqueLongo(botao) {
 	if (foiToqueLongo) return
 	foiToqueLongo = true
+	inicioDoGestoAberto = toqueLongo?.inicio || null
 	pararToqueLongo()
 	abrirZoom(botao)
+}
+
+// Segurou e depois começou a rolar: era rolagem, então desfaz a abertura da carta.
+function desfazerSeRolou(x, y) {
+	if (!inicioDoGestoAberto) return
+	if (Math.hypot(x - inicioDoGestoAberto.x, y - inicioDoGestoAberto.y) > TOLERANCIA_DEDO * 2) {
+		inicioDoGestoAberto = null
+		fecharZoom(false, true)
+	}
 }
 
 function pararToqueLongo() {
@@ -254,21 +265,37 @@ tela.addEventListener('pointerdown', evento => {
 	}
 })
 
-tela.addEventListener('pointermove', evento => {
+// Dedo se mexeu além da tolerância: é rolagem, não "segurar".
+function conferirMovimento(x, y) {
 	if (!toqueLongo) return
-	const { x, y } = toqueLongo.inicio
-	if (Math.hypot(evento.clientX - x, evento.clientY - y) > TOLERANCIA_DEDO) {
-		toqueLongo.mexeu = true
-		pararToqueLongo()
-	}
+	const distancia = Math.hypot(x - toqueLongo.inicio.x, y - toqueLongo.inicio.y)
+	toqueLongo.maiorDistancia = Math.max(toqueLongo.maiorDistancia || 0, distancia)
+	if (distancia > TOLERANCIA_DEDO) pararToqueLongo()
+}
+
+tela.addEventListener('pointermove', evento => {
+	conferirMovimento(evento.clientX, evento.clientY)
+	desfazerSeRolou(evento.clientX, evento.clientY)
 })
+// touchmove continua chegando mesmo depois que a tela começa a rolar.
+tela.addEventListener('touchmove', evento => {
+	const dedo = evento.touches[0]
+	if (!dedo) return
+	conferirMovimento(dedo.clientX, dedo.clientY)
+	desfazerSeRolou(dedo.clientX, dedo.clientY)
+}, { passive: true })
+for (const tipo of ['touchend', 'touchcancel', 'pointerup']) {
+	tela.addEventListener(tipo, () => { inicioDoGestoAberto = null })
+}
+// Se a tela rolou, com certeza não era para abrir a carta.
+window.addEventListener('scroll', pararToqueLongo, { passive: true })
 
 tela.addEventListener('pointerup', pararToqueLongo)
 
-// O navegador cancela o toque quando começa a rolar a tela, mas o Android às vezes
-// cancela também no próprio toque longo; nesse caso (dedo parado) continuamos esperando.
+// O navegador cancela o toque quando começa a rolar a tela; o Android às vezes cancela
+// também no próprio toque longo. Só continuamos esperando se o dedo estava parado.
 tela.addEventListener('pointercancel', () => {
-	if (toqueLongo?.mexeu !== false) pararToqueLongo()
+	if (!toqueLongo || (toqueLongo.maiorDistancia || 0) > 3) pararToqueLongo()
 })
 
 tela.addEventListener('contextmenu', evento => {
@@ -335,7 +362,9 @@ function abrirZoom(botao) {
 	$('#zoom-giro').animate([
 		{ transform: `${origem} rotateY(0deg)` },
 		{ transform: 'translate(0, 0) scale(1) rotateY(720deg)' },
-	], { duration: 950, easing: 'cubic-bezier(.2, .7, .25, 1)' }).finished.finally(() => { animandoZoom = false })
+	], { duration: 950, easing: 'cubic-bezier(.2, .7, .25, 1)' }).finished
+		.catch(() => { /* animação interrompida (ex.: começou a rolar) */ })
+		.finally(() => { animandoZoom = false })
 	$('#zoom-detalhes').animate([
 		{ opacity: 0, transform: 'translateY(12px)' },
 		{ opacity: 0, transform: 'translateY(12px)', offset: .6 },
@@ -344,8 +373,9 @@ function abrirZoom(botao) {
 }
 
 // Fecha: a carta volta girando para o lugar dela na grade.
-async function fecharZoom(animar = true) {
-	if ($('#zoom').hidden || animandoZoom) return
+async function fecharZoom(animar = true, forcar = false) {
+	if ($('#zoom').hidden || (animandoZoom && !forcar)) return
+	if (forcar) animandoZoom = false
 	const destino = animar && !semAnimacao() && document.body.contains(cartaAberta) ? transformacaoDaGrade(cartaAberta) : null
 	if (destino) {
 		animandoZoom = true
@@ -365,7 +395,8 @@ async function fecharZoom(animar = true) {
 
 function atualizarBotaoZoom() {
 	const marcada = tenho(cartaAberta.dataset.set, cartaAberta.dataset.n)
-	$('#zoom-marcar').textContent = marcada ? '✓ Tenho esta carta (desmarcar)' : 'Marcar como "tenho"'
+	$('#zoom-status').hidden = !marcada
+	$('#zoom-marcar').textContent = marcada ? 'Desmarcar' : 'Marcar como "tenho"'
 	$('#zoom-marcar').classList.toggle('secundario', marcada)
 }
 
