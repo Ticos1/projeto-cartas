@@ -1,0 +1,13 @@
+{
+  "appId": "io.github.ticos1.colecaotcg",
+  "appName": "Coleção TCG",
+  "webDir": "www",
+  "server": {
+    "url": "https://ticos1.github.io/projeto-cartas/",
+    "errorPath": "erro.html"
+  },
+  "android": {
+    "appendUserAgent": "ColecaoTCG-Android/1",
+    "backgroundColor": "#14161c"
+  }
+}

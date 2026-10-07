@@ -432,3 +432,12 @@ main {
 	color: var(--texto-fraco);
 }
 .convite b { color: var(--texto); }
+
+.convite.novidade {
+	width: auto;
+	max-width: 928px;
+	margin: 12px 16px 0;
+	border-style: solid;
+	border-color: var(--ok);
+}
+@media (min-width: 992px) { .convite.novidade { margin: 12px auto 0; } }

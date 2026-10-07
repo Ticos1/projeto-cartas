@@ -453,7 +453,22 @@ $('#exportar').addEventListener('click', async () => {
 	const quantidade = Object.values(cartas).reduce((soma, lista) => soma + lista.length, 0)
 	const backup = { app: 'minha-colecao-tcg', versao: 1, exportadoEm: new Date().toISOString(), cartas }
 	const nome = `colecao-tcg-${new Date().toISOString().slice(0, 10)}.json`
-	const arquivo = new File([JSON.stringify(backup, null, 1)], nome, { type: 'application/json' })
+	const texto = JSON.stringify(backup, null, 1)
+
+	// Dentro do app Android: salva o arquivo e abre o menu de compartilhar do Android.
+	const nativo = window.Capacitor?.isNativePlatform?.() && window.Capacitor.Plugins
+	if (nativo?.Filesystem && nativo?.Share) {
+		try {
+			const { uri } = await nativo.Filesystem.writeFile({ path: nome, data: texto, directory: 'CACHE', encoding: 'utf8' })
+			await nativo.Share.share({ title: 'Backup da coleção', files: [uri] })
+			avisar(`Backup com ${quantidade} cartas exportado.`)
+		} catch (erro) {
+			if (!/cancel/i.test(erro?.message || '')) avisar('Não foi possível exportar o backup.')
+		}
+		return
+	}
+
+	const arquivo = new File([texto], nome, { type: 'application/json' })
 
 	// No celular, abre o menu de compartilhar (salvar no Drive, mandar no WhatsApp...).
 	if (navigator.canShare?.({ files: [arquivo] })) {
@@ -630,6 +645,40 @@ $('#botao-sair').addEventListener('click', async () => {
 	avisar('Você saiu da conta. A coleção continua salva neste aparelho.')
 })
 
+/* ---------- App Android: aviso de versão nova ---------- */
+// O APK se identifica como "ColecaoTCG-Android/N". Se houver um APK mais novo
+// em Releases no GitHub, mostra um aviso para baixar.
+const LINK_APK = 'https://github.com/Ticos1/projeto-cartas/releases/latest/download/colecao-tcg.apk'
+const CHAVE_VERSAO = 'colecao-tcg-ultima-versao-apk'
+
+async function verificarVersaoDoApp() {
+	const instalada = Number(navigator.userAgent.match(/ColecaoTCG-Android\/(\d+)/)?.[1])
+	if (!instalada) return
+
+	// Consulta o GitHub no máximo a cada 6 horas.
+	let info = null
+	try { info = JSON.parse(ler(CHAVE_VERSAO) || 'null') } catch { /* sem cache */ }
+	if (!info || Date.now() - info.quando > 6 * 3600 * 1000) {
+		try {
+			const resposta = await fetch('https://api.github.com/repos/Ticos1/projeto-cartas/releases/latest')
+			const release = await resposta.json()
+			info = { quando: Date.now(), versao: Number(String(release.tag_name).split('.')[1]) || 0 }
+			gravar(CHAVE_VERSAO, JSON.stringify(info))
+		} catch { return }
+	}
+	if (info.versao > instalada) mostrarAvisoDeVersao(info.versao)
+}
+
+function mostrarAvisoDeVersao(versao) {
+	if ($('#aviso-versao')) return
+	const aviso = document.createElement('button')
+	aviso.id = 'aviso-versao'
+	aviso.className = 'convite novidade'
+	aviso.innerHTML = `<span aria-hidden="true">📲</span><span><b>Nova versão do app (1.${versao}).</b> Toque para baixar e instalar.</span>`
+	aviso.addEventListener('click', () => { location.href = LINK_APK })
+	document.body.insertBefore(aviso, tela)
+}
+
 /* ---------- Início ---------- */
 async function iniciar() {
 	aplicarTema(ler(CHAVE_TEMA) || 'auto')
@@ -643,6 +692,7 @@ async function iniciar() {
 	}
 	navegar()
 	carregarNuvem()
+	verificarVersaoDoApp()
 
 	if ('serviceWorker' in navigator) {
 		navigator.serviceWorker.register('sw.js').catch(() => { /* app funciona sem modo offline */ })

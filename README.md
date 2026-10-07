@@ -74,3 +74,17 @@ celulares pegarem a versão nova.
 - Regras do Firestore: cada pessoa só lê e altera o próprio documento.
 - No primeiro login em um aparelho, o que já estava marcado nele é somado ao que está na nuvem.
 - Sem internet, as marcações ficam guardadas e são enviadas quando a conexão volta.
+
+## App Android (APK)
+
+- Pasta `android-app/`: projeto [Capacitor](https://capacitorjs.com) que abre o site
+  `https://ticos1.github.io/projeto-cartas/` em tela cheia. Mudanças no site aparecem no app
+  sem precisar de APK novo.
+- O GitHub Actions (`.github/workflows/android.yml`) gera o APK quando algo em `android-app/`
+  muda (ou manualmente na aba Actions) e publica em **Releases**.
+- Link fixo do APK mais recente:
+  https://github.com/Ticos1/projeto-cartas/releases/latest/download/colecao-tcg.apk
+- O app avisa quando existe um APK mais novo (`verificarVersaoDoApp` em `app.js`).
+- Assinatura: a chave e a senha ficam **só** nos segredos do repositório
+  (`ANDROID_KEYSTORE_BASE64` e `ANDROID_KEYSTORE_PASSWORD`), nunca no código.
+  Guarde uma cópia delas: sem a mesma chave, atualizações não instalam por cima do app.
