@@ -10,7 +10,7 @@ const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v21'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v22'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -723,9 +723,7 @@ function telaPesquisa() {
 		${htmlConvite()}
 		<input class="busca" id="busca" type="search" placeholder="Nome ou número da carta" value="${escapar(pesquisa.texto)}" autocomplete="off" enterkeyhint="search">
 		<div class="filtros">
-			<select id="filtro-set" aria-label="Filtrar por set">
-				${opcao('', 'Todos os sets', pesquisa.set)}${dados.sets.map(s => opcao(s.id, s.nome, pesquisa.set)).join('')}
-			</select>
+			<button class="seletor" id="filtro-set" aria-haspopup="dialog" aria-label="Filtrar por coleção"></button>
 			<select id="filtro-raridade" aria-label="Filtrar por raridade">
 				${opcao('', 'Todas as raridades', pesquisa.raridade)}${raridadesDasCartas().map(r => opcao(r, r, pesquisa.raridade)).join('')}
 			</select>
@@ -747,7 +745,8 @@ function telaPesquisa() {
 			desenharPesquisa()
 		}, 120)
 	})
-	$('#filtro-set').addEventListener('change', evento => { pesquisa.set = evento.target.value; pesquisa.limite = PASSO_PESQUISA; desenharPesquisa() })
+	atualizarSeletorSet()
+	$('#filtro-set').addEventListener('click', abrirEscolhaSet)
 	$('#filtro-raridade').addEventListener('change', evento => { pesquisa.raridade = evento.target.value; pesquisa.limite = PASSO_PESQUISA; desenharPesquisa() })
 	$('#filtro-status').addEventListener('click', evento => {
 		const botao = evento.target.closest('button')
@@ -758,6 +757,66 @@ function telaPesquisa() {
 	})
 	desenharPesquisa()
 }
+
+// Ícone de uma coleção: o logo do set; sem logo, a sigla em texto. id vazio = "todos os sets".
+function htmlIconeSet(set) {
+	if (!set) return `<span class="icone-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg></span>`
+	return `<span class="icone-logo"><img alt="" data-logo="${escapar(set.id)}"><span hidden>${escapar(set.sigla || set.id)}</span></span>`
+}
+function carregarLogosDentro(elemento) {
+	for (const img of elemento.querySelectorAll('img[data-logo]')) {
+		carregarEmOrdem(img, fontesImagem(img.dataset.logo, 'logo.webp'), () => {
+			img.hidden = true
+			img.nextElementSibling.hidden = false
+		})
+	}
+}
+
+// O botão do filtro mostra a coleção escolhida (logo + nome).
+function atualizarSeletorSet() {
+	const botao = $('#filtro-set')
+	if (!botao) return
+	const set = dados.sets.find(s => s.id === pesquisa.set)
+	botao.innerHTML = `${htmlIconeSet(set)}<span class="seletor-texto">${escapar(set ? set.nome : 'Todos os sets')}</span>
+		<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>`
+	carregarLogosDentro(botao)
+}
+
+// Lista de coleções com logo, que abre de baixo (o voltar do celular fecha só ela).
+function abrirEscolhaSet() {
+	if (!$('#escolha-set').hidden) return
+	const opcoes = [null, ...dados.sets]
+	$('#opcoes-set').innerHTML = opcoes.map(set => {
+		const id = set ? set.id : ''
+		const detalhe = set ? `${cartasDoSet(set).length} cartas` : `${dados.sets.length} coleções`
+		return `<li><button class="opcao-set" role="radio" aria-checked="${id === pesquisa.set}" data-set="${escapar(id)}">
+			${htmlIconeSet(set)}
+			<span class="opcao-nome">${escapar(set ? set.nome : 'Todos os sets')}<small>${detalhe}</small></span>
+			<svg class="marca" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+		</button></li>`
+	}).join('')
+	carregarLogosDentro($('#opcoes-set'))
+	$('#escolha-set').hidden = false
+	registrarSobreposicao()
+	if (!semAnimacao()) $('#escolha-set .folha').animate([{ transform: 'translateY(40px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 200, easing: 'ease-out' })
+}
+
+function fecharEscolhaSet(veioDoHistorico = false) {
+	if ($('#escolha-set').hidden) return
+	$('#escolha-set').hidden = true
+	if (!veioDoHistorico) liberarSobreposicao()
+}
+
+$('#escolha-set').addEventListener('click', evento => {
+	if (evento.target.id === 'escolha-set') { fecharEscolhaSet(); return }
+	const botao = evento.target.closest('.opcao-set')
+	if (!botao) return
+	pesquisa.set = botao.dataset.set
+	pesquisa.limite = PASSO_PESQUISA
+	fecharEscolhaSet()
+	atualizarSeletorSet()
+	desenharPesquisa()
+})
 
 function desenharPesquisa() {
 	for (const botao of document.querySelectorAll('#filtro-status button')) {
@@ -928,6 +987,7 @@ function navegar() {
 	// Toda tela que o app abre fica marcada como "do app" no histórico.
 	if (!history.state?.app) history.replaceState({ app: true }, '')
 	$('#gaveta').hidden = true
+	$('#escolha-set').hidden = true
 	const { setId, aba } = rotaAtual()
 	if (setId) telaSet(setId)
 	else if (aba === 'colecoes') telaColecoes()
@@ -967,6 +1027,7 @@ window.addEventListener('popstate', () => {
 	if (!$('#zoom').hidden) fecharZoom(true, true, true)
 	else if (!$('#menu').hidden) fecharMenu(true)
 	else if (!$('#gaveta').hidden) fecharGaveta(true)
+	else if (!$('#escolha-set').hidden) fecharEscolhaSet(true)
 })
 
 function prepararHistorico() {

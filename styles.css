@@ -684,6 +684,7 @@ main {
 /* ---------- Aba Pesquisa ---------- */
 .filtros { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
 .filtros select {
+	min-height: 46px;
 	width: 100%;
 	min-width: 0;
 	padding: 11px 12px;
@@ -697,3 +698,47 @@ main {
 .dica-pesquisa .icone-grande { font-size: 2.4rem; margin-bottom: 8px; }
 .dica-pesquisa p { margin: 4px 0; }
 #mais-resultados { margin-top: 16px; }
+
+/* ---------- Seletor de coleção com logos ---------- */
+.seletor {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-width: 0;
+	min-height: 46px;
+	padding: 6px 10px;
+	border: 1px solid var(--borda);
+	border-radius: 12px;
+	background: var(--superficie);
+	color: var(--texto);
+	font: inherit;
+	font-size: .92rem;
+	text-align: left;
+}
+.seletor-texto { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seletor > svg { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--texto-fraco); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.icone-logo { width: 44px; height: 26px; flex: none; display: grid; place-items: center; color: var(--texto-fraco); font-size: .68rem; font-weight: 700; }
+.icone-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.icone-logo svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.lista-opcoes { margin: 8px 0 0; padding: 0; list-style: none; }
+.opcao-set {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	width: 100%;
+	padding: 10px 8px;
+	border: 0;
+	border-radius: 12px;
+	background: none;
+	color: inherit;
+	text-align: left;
+}
+.opcao-set:active { background: var(--superficie-2); }
+.opcao-set .icone-logo { width: 72px; height: 44px; }
+.opcao-set .opcao-nome { flex: 1; min-width: 0; font-weight: 600; }
+.opcao-set small { display: block; font-weight: 400; color: var(--texto-fraco); }
+.opcao-set .marca { width: 22px; height: 22px; flex: none; fill: none; stroke: var(--ok); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.opcao-set[aria-checked="true"] { background: var(--superficie-2); }
+.opcao-set[aria-checked="true"] .marca { opacity: 1; }
