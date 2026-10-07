@@ -10,6 +10,7 @@
 	--destaque-texto: #ffffff;
 	--ok: #1f9d55;
 	--sombra: 0 1px 3px rgba(0, 0, 0, .08), 0 4px 12px rgba(0, 0, 0, .05);
+	--simbolo-preto: #3a4050;
 	color-scheme: light;
 }
 
@@ -24,6 +25,7 @@
 		--destaque: #f0524a;
 		--ok: #3ccf7f;
 		--sombra: 0 1px 3px rgba(0, 0, 0, .4);
+		--simbolo-preto: #8f97a6;
 		color-scheme: dark;
 	}
 }
@@ -38,6 +40,7 @@
 	--destaque: #f0524a;
 	--ok: #3ccf7f;
 	--sombra: 0 1px 3px rgba(0, 0, 0, .4);
+	--simbolo-preto: #8f97a6;
 	color-scheme: dark;
 }
 
@@ -742,3 +745,12 @@ main {
 .opcao-set .marca { width: 22px; height: 22px; flex: none; fill: none; stroke: var(--ok); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
 .opcao-set[aria-checked="true"] { background: var(--superficie-2); }
 .opcao-set[aria-checked="true"] .marca { opacity: 1; }
+
+/* ---------- Símbolos de raridade (os mesmos impressos no canto da carta) ---------- */
+.icone-simbolos { width: 44px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center; }
+.simbolo { width: 18px; height: 18px; flex: none; margin-left: -3px; }
+.simbolo:first-child { margin-left: 0; }
+.opcao-set .icone-simbolos { width: 72px; height: 44px; }
+.opcao-set .simbolo { width: 26px; height: 26px; margin-left: -4px; }
+.opcao-set .simbolo:first-child { margin-left: 0; }
+.opcao-set.apagada { opacity: .45; }

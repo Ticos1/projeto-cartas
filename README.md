@@ -145,3 +145,10 @@ Quem desligou as animações no celular vê só um clarão rápido, sem moviment
 - A gaveta (três riscos) é uma sobreposição no histórico: o botão voltar do celular só a fecha.
 - Para criar uma aba nova: um item em `<nav class="gaveta">` no `index.html`, uma função
   `telaXxx()` em `app.js` e o caso correspondente em `rotaAtual()` e `navegar()`.
+
+## Filtros com ícones (Pesquisa)
+
+- **Coleção:** lista com o logo de cada set.
+- **Raridade:** lista com os mesmos símbolos impressos no canto da carta (● ◆ ★ ★★ …).
+  Os desenhos estão em `FORMAS_SIMBOLO` / `SIMBOLOS_RARIDADE` em `app.js`; a cor do "preto"
+  muda com o tema (`--simbolo-preto` em `styles.css`).

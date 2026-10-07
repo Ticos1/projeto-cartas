@@ -10,7 +10,7 @@ const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v22'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v23'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -717,16 +717,13 @@ function raridadesDasCartas() {
 
 function telaPesquisa() {
 	definirTopo('Pesquisa', 'Todas as cartas', false)
-	const opcao = (valor, texto, atual) => `<option value="${escapar(valor)}"${valor === atual ? ' selected' : ''}>${escapar(texto)}</option>`
 
 	tela.innerHTML = `
 		${htmlConvite()}
 		<input class="busca" id="busca" type="search" placeholder="Nome ou número da carta" value="${escapar(pesquisa.texto)}" autocomplete="off" enterkeyhint="search">
 		<div class="filtros">
 			<button class="seletor" id="filtro-set" aria-haspopup="dialog" aria-label="Filtrar por coleção"></button>
-			<select id="filtro-raridade" aria-label="Filtrar por raridade">
-				${opcao('', 'Todas as raridades', pesquisa.raridade)}${raridadesDasCartas().map(r => opcao(r, r, pesquisa.raridade)).join('')}
-			</select>
+			<button class="seletor" id="filtro-raridade" aria-haspopup="dialog" aria-label="Filtrar por raridade"></button>
 		</div>
 		<div class="segmentos" id="filtro-status">
 			<button data-status="todas">Todas</button>
@@ -747,7 +744,8 @@ function telaPesquisa() {
 	})
 	atualizarSeletorSet()
 	$('#filtro-set').addEventListener('click', abrirEscolhaSet)
-	$('#filtro-raridade').addEventListener('change', evento => { pesquisa.raridade = evento.target.value; pesquisa.limite = PASSO_PESQUISA; desenharPesquisa() })
+	atualizarSeletorRaridade()
+	$('#filtro-raridade').addEventListener('click', abrirEscolhaRaridade)
 	$('#filtro-status').addEventListener('click', evento => {
 		const botao = evento.target.closest('button')
 		if (!botao) return
@@ -777,46 +775,117 @@ function atualizarSeletorSet() {
 	const botao = $('#filtro-set')
 	if (!botao) return
 	const set = dados.sets.find(s => s.id === pesquisa.set)
-	botao.innerHTML = `${htmlIconeSet(set)}<span class="seletor-texto">${escapar(set ? set.nome : 'Todos os sets')}</span>
-		<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>`
+	botao.innerHTML = `${htmlIconeSet(set)}<span class="seletor-texto">${escapar(set ? set.nome : 'Todos os sets')}</span>${SETA_SELETOR}`
 	carregarLogosDentro(botao)
 }
+const SETA_SELETOR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>'
 
-// Lista de coleções com logo, que abre de baixo (o voltar do celular fecha só ela).
-function abrirEscolhaSet() {
-	if (!$('#escolha-set').hidden) return
-	const opcoes = [null, ...dados.sets]
-	$('#opcoes-set').innerHTML = opcoes.map(set => {
-		const id = set ? set.id : ''
-		const detalhe = set ? `${cartasDoSet(set).length} cartas` : `${dados.sets.length} coleções`
-		return `<li><button class="opcao-set" role="radio" aria-checked="${id === pesquisa.set}" data-set="${escapar(id)}">
-			${htmlIconeSet(set)}
-			<span class="opcao-nome">${escapar(set ? set.nome : 'Todos os sets')}<small>${detalhe}</small></span>
-			<svg class="marca" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
-		</button></li>`
-	}).join('')
-	carregarLogosDentro($('#opcoes-set'))
-	$('#escolha-set').hidden = false
-	registrarSobreposicao()
-	if (!semAnimacao()) $('#escolha-set .folha').animate([{ transform: 'translateY(40px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 200, easing: 'ease-out' })
+/* Símbolos de raridade: os mesmos que a carta traz impressos no canto inferior esquerdo. */
+const ESTRELA = 'M12 2.8l2.8 6 6.5.8-4.8 4.5 1.3 6.5L12 17.4l-5.8 3.2 1.3-6.5-4.8-4.5 6.5-.8z'
+const PRETO = 'var(--simbolo-preto)'   // o "preto" das cartas; muda com o tema para aparecer em fundo claro e escuro
+// Cada forma é desenhada com style (e não com atributos) para poder usar a variável de cor do tema.
+const forma = (preenchimento, contorno, largura) => `fill:${preenchimento};stroke:${contorno};stroke-width:${largura}`
+const estrela = (preenchimento, contorno) => `<path d="${ESTRELA}" style="${forma(preenchimento, contorno, 1.7)}" stroke-linejoin="round"/>`
+const FORMAS_SIMBOLO = {
+	'circulo': `<circle cx="12" cy="12" r="6.5" style="${forma(PRETO, '#fff', 2)}"/>`,
+	'losango': `<path d="M12 3.5l7 8.5-7 8.5-7-8.5z" style="${forma(PRETO, '#fff', 2)}" stroke-linejoin="round"/>`,
+	'estrela-preta': estrela(PRETO, '#fff'),
+	'estrela-branca': estrela('#fff', '#8b93a1'),
+	'estrela-dourada': estrela('#ffc933', '#fff2c2'),
+	'brilho-dourado': `<path d="M12 2.5l2.4 7.1 7.1 2.4-7.1 2.4L12 21.5l-2.4-7.1L2.5 12l7.1-2.4z" style="${forma('#2a2410', '#ffc933', 2)}" stroke-linejoin="round"/>`,
+	'estrela-rosa': estrela('#ff9ac8', '#ff2f92'),
+	'estrela-verde': estrela('#7ee6ad', '#1ba463'),
+	'estrela-roxa': estrela('#b58cff', '#6a3fd0'),
+	'estrela-vermelha': estrela('#ff7a7a', '#d02f2f'),
+	'estrela-azul': estrela('#7aa8ff', '#2f5fd0'),
+	'promo': `${estrela(PRETO, '#fff')}<circle cx="9.6" cy="12" r=".9" fill="#fff"/><circle cx="12" cy="13.6" r=".9" fill="#fff"/><circle cx="14.4" cy="12" r=".9" fill="#fff"/>`,
+	'pikachu': `<path d="M5 3l6.5 6L4.5 10.5zM19 3l-6.5 6 7 1.5z" style="${forma(PRETO, '#fff', 1.4)}" stroke-linejoin="round"/><ellipse cx="12" cy="15" rx="7.5" ry="6" style="${forma(PRETO, '#fff', 1.6)}"/>`,
+}
+const SIMBOLOS_RARIDADE = {
+	'Comum': ['circulo'],
+	'Incomum': ['losango'],
+	'Rara': ['estrela-preta'],
+	'Rara Dupla': ['estrela-preta', 'estrela-preta'],
+	'Ultra Rara': ['estrela-branca', 'estrela-branca'],
+	'Rara Ilustrada': ['estrela-dourada'],
+	'Rara Ilustrada Especial': ['estrela-dourada', 'estrela-dourada'],
+	'Mega Rara Hiper': ['brilho-dourado'],
+	'Rara Mega Ataque': ['estrela-rosa', 'estrela-verde'],
+	'Rara Pikachu': ['pikachu'],
+	'Rara Futurista': ['estrela-roxa'],
+	'Rara RGB': ['estrela-vermelha', 'estrela-verde', 'estrela-azul'],
+	'Promo': ['promo'],
+}
+function htmlIconeRaridade(raridade) {
+	const nomes = raridade ? SIMBOLOS_RARIDADE[raridade] || ['circulo'] : ['circulo', 'losango', 'estrela-preta']   // vazio = todas
+	return `<span class="icone-simbolos">${nomes.map(n => `<svg class="simbolo" viewBox="0 0 24 24" aria-hidden="true">${FORMAS_SIMBOLO[n]}</svg>`).join('')}</span>`
+}
+function atualizarSeletorRaridade() {
+	const botao = $('#filtro-raridade')
+	if (!botao) return
+	botao.innerHTML = `${htmlIconeRaridade(pesquisa.raridade)}<span class="seletor-texto">${escapar(pesquisa.raridade || 'Todas as raridades')}</span>${SETA_SELETOR}`
 }
 
-function fecharEscolhaSet(veioDoHistorico = false) {
-	if ($('#escolha-set').hidden) return
-	$('#escolha-set').hidden = true
+/* Lista de escolha com ícones, que abre de baixo (o voltar do celular fecha só ela). */
+let aoEscolher = null
+function abrirEscolha(titulo, opcoes, atual, escolheu) {
+	if (!$('#escolha').hidden) return
+	$('#escolha-titulo').textContent = titulo
+	$('#opcoes-escolha').innerHTML = opcoes.map(o => `<li><button class="opcao-set${o.apagada ? ' apagada' : ''}" role="radio" aria-checked="${o.valor === atual}" data-valor="${escapar(o.valor)}">
+		${o.icone}
+		<span class="opcao-nome">${escapar(o.rotulo)}<small>${escapar(o.detalhe)}</small></span>
+		<svg class="marca" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+	</button></li>`).join('')
+	carregarLogosDentro($('#opcoes-escolha'))
+	aoEscolher = escolheu
+	$('#escolha').hidden = false
+	registrarSobreposicao()
+	if (!semAnimacao()) $('#escolha .folha').animate([{ transform: 'translateY(40px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 200, easing: 'ease-out' })
+}
+
+function fecharEscolha(veioDoHistorico = false) {
+	if ($('#escolha').hidden) return
+	$('#escolha').hidden = true
 	if (!veioDoHistorico) liberarSobreposicao()
 }
 
-$('#escolha-set').addEventListener('click', evento => {
-	if (evento.target.id === 'escolha-set') { fecharEscolhaSet(); return }
+$('#escolha').addEventListener('click', evento => {
+	if (evento.target.id === 'escolha') { fecharEscolha(); return }
 	const botao = evento.target.closest('.opcao-set')
 	if (!botao) return
-	pesquisa.set = botao.dataset.set
-	pesquisa.limite = PASSO_PESQUISA
-	fecharEscolhaSet()
-	atualizarSeletorSet()
-	desenharPesquisa()
+	const escolheu = aoEscolher
+	fecharEscolha()
+	escolheu?.(botao.dataset.valor)
 })
+
+function abrirEscolhaSet() {
+	const opcoes = [{ valor: '', icone: htmlIconeSet(null), rotulo: 'Todos os sets', detalhe: `${dados.sets.length} coleções` },
+		...dados.sets.map(set => ({ valor: set.id, icone: htmlIconeSet(set), rotulo: set.nome, detalhe: `${cartasDoSet(set).length} cartas` }))]
+	abrirEscolha('Coleção', opcoes, pesquisa.set, valor => {
+		pesquisa.set = valor
+		pesquisa.limite = PASSO_PESQUISA
+		atualizarSeletorSet()
+		desenharPesquisa()
+	})
+}
+
+function abrirEscolhaRaridade() {
+	// Quantas cartas de cada raridade existem (na coleção escolhida, se houver uma).
+	const contagem = {}
+	for (const set of dados.sets) {
+		if (pesquisa.set && set.id !== pesquisa.set) continue
+		for (const carta of cartasDoSet(set)) if (carta.raridade) contagem[carta.raridade] = (contagem[carta.raridade] || 0) + 1
+	}
+	const total = Object.values(contagem).reduce((soma, n) => soma + n, 0)
+	const opcoes = [{ valor: '', icone: htmlIconeRaridade(''), rotulo: 'Todas as raridades', detalhe: `${total} cartas` },
+		...raridadesDasCartas().map(r => ({ valor: r, icone: htmlIconeRaridade(r), rotulo: r, detalhe: `${contagem[r] || 0} carta${contagem[r] === 1 ? '' : 's'}`, apagada: !contagem[r] }))]
+	abrirEscolha('Raridade', opcoes, pesquisa.raridade, valor => {
+		pesquisa.raridade = valor
+		pesquisa.limite = PASSO_PESQUISA
+		atualizarSeletorRaridade()
+		desenharPesquisa()
+	})
+}
 
 function desenharPesquisa() {
 	for (const botao of document.querySelectorAll('#filtro-status button')) {
@@ -987,7 +1056,7 @@ function navegar() {
 	// Toda tela que o app abre fica marcada como "do app" no histórico.
 	if (!history.state?.app) history.replaceState({ app: true }, '')
 	$('#gaveta').hidden = true
-	$('#escolha-set').hidden = true
+	$('#escolha').hidden = true
 	const { setId, aba } = rotaAtual()
 	if (setId) telaSet(setId)
 	else if (aba === 'colecoes') telaColecoes()
@@ -1027,7 +1096,7 @@ window.addEventListener('popstate', () => {
 	if (!$('#zoom').hidden) fecharZoom(true, true, true)
 	else if (!$('#menu').hidden) fecharMenu(true)
 	else if (!$('#gaveta').hidden) fecharGaveta(true)
-	else if (!$('#escolha-set').hidden) fecharEscolhaSet(true)
+	else if (!$('#escolha').hidden) fecharEscolha(true)
 })
 
 function prepararHistorico() {
