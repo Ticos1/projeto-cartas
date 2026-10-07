@@ -10,6 +10,7 @@ const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
+const VERSAO_APP = 'v8'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -215,37 +216,66 @@ function montarGrade(itens, mostrarSet) {
 	return grade
 }
 
-// Toque = marcar/desmarcar.  Toque longo = ver a carta grande.
+// Toque = marcar/desmarcar.  Segurar = ver a carta grande.
+// No celular, segurar pode chegar de dois jeitos: pelo nosso cronômetro ou pelo
+// "toque longo" do próprio Android (evento contextmenu). Qualquer um abre a carta.
+const TEMPO_SEGURAR = 450
+const TOLERANCIA_DEDO = 14   // px que o dedo pode tremer sem virar rolagem
 let toqueLongo = null
 let foiToqueLongo = false
+
+function abrirPorToqueLongo(botao) {
+	if (foiToqueLongo) return
+	foiToqueLongo = true
+	pararToqueLongo()
+	abrirZoom(botao)
+}
+
+function pararToqueLongo() {
+	if (!toqueLongo) return
+	clearTimeout(toqueLongo.timer)
+	clearTimeout(toqueLongo.timerAfundar)
+	toqueLongo.botao.classList.remove('pressionando')
+	toqueLongo = null
+}
 
 tela.addEventListener('pointerdown', evento => {
 	const botao = evento.target.closest('.carta')
 	if (!botao) return
+	pararToqueLongo()
 	foiToqueLongo = false
-	const inicio = { x: evento.clientX, y: evento.clientY }
-	clearTimeout(toqueLongo?.timer)
 	toqueLongo = {
-		inicio,
-		timer: setTimeout(() => {
-			foiToqueLongo = true
-			abrirZoom(botao)
-		}, 450),
+		botao,
+		inicio: { x: evento.clientX, y: evento.clientY },
+		mexeu: false,
+		// A carta "afunda" um pouco enquanto o dedo segura, para mostrar que algo vai acontecer.
+		timerAfundar: setTimeout(() => botao.classList.add('pressionando'), 120),
+		timer: setTimeout(() => abrirPorToqueLongo(botao), TEMPO_SEGURAR),
 	}
 })
 
 tela.addEventListener('pointermove', evento => {
 	if (!toqueLongo) return
 	const { x, y } = toqueLongo.inicio
-	if (Math.abs(evento.clientX - x) > 10 || Math.abs(evento.clientY - y) > 10) clearTimeout(toqueLongo.timer)
+	if (Math.hypot(evento.clientX - x, evento.clientY - y) > TOLERANCIA_DEDO) {
+		toqueLongo.mexeu = true
+		pararToqueLongo()
+	}
 })
 
-for (const tipo of ['pointerup', 'pointercancel', 'pointerleave']) {
-	tela.addEventListener(tipo, () => clearTimeout(toqueLongo?.timer))
-}
+tela.addEventListener('pointerup', pararToqueLongo)
+
+// O navegador cancela o toque quando começa a rolar a tela, mas o Android às vezes
+// cancela também no próprio toque longo; nesse caso (dedo parado) continuamos esperando.
+tela.addEventListener('pointercancel', () => {
+	if (toqueLongo?.mexeu !== false) pararToqueLongo()
+})
 
 tela.addEventListener('contextmenu', evento => {
-	if (evento.target.closest('.carta')) evento.preventDefault()
+	const botao = evento.target.closest('.carta')
+	if (!botao) return
+	evento.preventDefault()
+	abrirPorToqueLongo(botao)
 })
 
 tela.addEventListener('click', evento => {
@@ -345,9 +375,16 @@ $('#zoom-marcar').addEventListener('click', evento => {
 	atualizarProgressoNaTela()
 })
 
+// Fecha ao tocar fora do botão, mas só num toque novo: o mesmo dedo que segurou a
+// carta, ao soltar, não deve fechar a carta que acabou de abrir.
+let toqueComecouNoZoom = false
+$('#zoom').addEventListener('pointerdown', () => { toqueComecouNoZoom = true })
 $('#zoom').addEventListener('click', evento => {
-	if (evento.target.id !== 'zoom-marcar') fecharZoom()
+	const novoToque = toqueComecouNoZoom
+	toqueComecouNoZoom = false
+	if (novoToque && evento.target.id !== 'zoom-marcar') fecharZoom()
 })
+$('#zoom').addEventListener('contextmenu', evento => evento.preventDefault())
 
 /* ---------- Tela: início (lista de sets) ---------- */
 function telaInicio() {
@@ -806,6 +843,7 @@ function mostrarAvisoDeVersao(versao) {
 
 /* ---------- Início ---------- */
 async function iniciar() {
+	$('#versao-app').textContent = VERSAO_APP
 	aplicarTema(ler(CHAVE_TEMA) || 'auto')
 	carregarColecao()
 	try {
