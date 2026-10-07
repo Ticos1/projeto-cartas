@@ -152,3 +152,8 @@ Quem desligou as animações no celular vê só um clarão rápido, sem moviment
 - **Raridade:** lista com os mesmos símbolos impressos no canto da carta (● ◆ ★ ★★ …).
   Os desenhos estão em `FORMAS_SIMBOLO` / `SIMBOLOS_RARIDADE` em `app.js`; a cor do "preto"
   muda com o tema (`--simbolo-preto` em `styles.css`).
+
+## Configurações (Temas e Logs)
+Aba **Configurações** (☰ ou ⋮ → "Temas, modo claro/escuro e logs").
+- **Temas**: Modo Automático/Claro/Escuro, 8 temas prontos (Padrão, Oceano, Floresta, Pôr do sol, Sakura, Meia-noite, Elétrico, Mega) e uma **cor personalizada**. A escolha fica salva no aparelho.
+- **Logs**: registro de erros, avisos e eventos do app (início, login, sincronização, atualizações). Dá para filtrar, copiar, compartilhar como arquivo e limpar. Ficam só no aparelho (máximo de 300).

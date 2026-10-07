@@ -9,8 +9,11 @@
 const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
+const CHAVE_PALETA = 'colecao-tcg-paleta'
+const CHAVE_COR = 'colecao-tcg-cor-destaque'
+const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v23'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v24'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -28,6 +31,35 @@ function ler(chave) {
 }
 function gravar(chave, valor) {
 	try { localStorage.setItem(chave, valor); return true } catch { return false }
+}
+
+/* ---------- Logs: registro de erros e eventos do app (ficam só neste aparelho) ---------- */
+const MAX_LOGS = 300
+let logs = []
+try { logs = JSON.parse(ler(CHAVE_LOGS) || '[]') } catch { logs = [] }
+let gravacaoDosLogs = 0
+
+function textoDe(valor) {
+	if (valor instanceof Error) return `${valor.name}: ${valor.message}`
+	if (typeof valor === 'object' && valor !== null) { try { return JSON.stringify(valor) } catch { return String(valor) } }
+	return String(valor)
+}
+
+// nivel: 'info' | 'aviso' | 'erro'
+function registrar(nivel, mensagem, detalhe = '') {
+	logs.push({ t: Date.now(), n: nivel, m: textoDe(mensagem).slice(0, 400), d: textoDe(detalhe).slice(0, 800) })
+	if (logs.length > MAX_LOGS) logs.splice(0, logs.length - MAX_LOGS)
+	clearTimeout(gravacaoDosLogs)
+	gravacaoDosLogs = setTimeout(() => gravar(CHAVE_LOGS, JSON.stringify(logs)), 400)
+	if (typeof atualizarListaLogs === 'function') atualizarListaLogs()
+}
+
+// Erros que o navegador não trata e avisos/erros que o próprio código escreve no console.
+window.addEventListener('error', evento => registrar('erro', evento.message || 'Erro de script', evento.filename ? `${evento.filename.split('/').pop()}:${evento.lineno}:${evento.colno}` : ''))
+window.addEventListener('unhandledrejection', evento => registrar('erro', `Promessa rejeitada: ${textoDe(evento.reason?.message || evento.reason)}`))
+for (const [metodo, nivel] of [['warn', 'aviso'], ['error', 'erro']]) {
+	const original = console[metodo].bind(console)
+	console[metodo] = (...argumentos) => { registrar(nivel, argumentos.map(textoDe).join(' ')); original(...argumentos) }
 }
 
 /* ---------- Coleção ---------- */
@@ -937,6 +969,191 @@ function desenharPesquisa() {
 	}
 }
 
+/* ---------- Aba: Configurações (sub-abas Temas e Logs) ---------- */
+function telaConfiguracoes(sub) {
+	definirTopo('Configurações', sub === 'logs' ? 'Logs' : 'Temas', false)
+	tela.innerHTML = `
+		<div class="segmentos" id="sub-abas">
+			<button data-sub="temas" class="${sub === 'temas' ? 'ativo' : ''}">Temas</button>
+			<button data-sub="logs" class="${sub === 'logs' ? 'ativo' : ''}">Logs</button>
+		</div>
+		<div id="conteudo"></div>`
+	$('#sub-abas').addEventListener('click', evento => {
+		const botao = evento.target.closest('button')
+		if (!botao || botao.dataset.sub === sub) return
+		// Trocar de sub-aba não cria entrada no histórico: o voltar do celular continua saindo da Configurações.
+		history.replaceState({ app: true }, '', botao.dataset.sub === 'logs' ? '#/configuracoes/logs' : '#/configuracoes')
+		navegar()
+	})
+	if (sub === 'logs') desenharLogs()
+	else desenharTemas()
+}
+
+/* ----- Temas ----- */
+function cartaDoTema(id, escuro, ativo) {
+	const variaveis = id === 'personalizado'
+		? { ...TEMAS.padrao[escuro ? 'escuro' : 'claro'], ...variaveisDoTema('personalizado', escuro) }
+		: TEMAS[id][escuro ? 'escuro' : 'claro']
+	const nome = id === 'personalizado' ? 'Personalizado' : TEMAS[id].nome
+	return `<button class="tema-card" data-tema-id="${id}" aria-pressed="${id === ativo}">
+		<span class="tema-previa" style="background:${variaveis['--fundo']}">
+			<span class="previa-barra" style="background:${variaveis['--destaque']}"></span>
+			<span class="previa-caixa" style="background:${variaveis['--superficie']}"></span>
+			<span class="previa-ponto" style="background:${variaveis['--destaque']}"></span>
+		</span>
+		<span class="tema-nome">${nome}<svg class="marca" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+	</button>`
+}
+
+function desenharTemas() {
+	const modo = ler(CHAVE_TEMA) || 'auto'
+	const ativo = ler(CHAVE_PALETA) || 'padrao'
+	const escuro = modoEscuro(modo)
+	$('#conteudo').innerHTML = `
+		<h2 class="titulo-secao">Modo</h2>
+		<div class="segmentos" id="modo">
+			<button data-modo="auto">Automático</button>
+			<button data-modo="claro">Claro</button>
+			<button data-modo="escuro">Escuro</button>
+		</div>
+		<p class="dica">Automático segue o modo do seu celular.</p>
+
+		<h2 class="titulo-secao">Temas</h2>
+		<div class="grade-temas" id="grade-temas">${ORDEM_TEMAS.map(id => cartaDoTema(id, escuro, ativo)).join('')}</div>
+
+		<h2 class="titulo-secao">Cor de destaque personalizada</h2>
+		<label class="cor-personalizada">
+			<input type="color" id="cor-destaque" value="${escapar(ler(CHAVE_COR) || '#d6342c')}">
+			<span>Escolha a cor dos botões e destaques<small>Vira o tema "Personalizado".</small></span>
+		</label>`
+
+	const marcarModo = () => {
+		for (const botao of document.querySelectorAll('#modo button')) botao.classList.toggle('ativo', botao.dataset.modo === (ler(CHAVE_TEMA) || 'auto'))
+	}
+	marcarModo()
+	$('#modo').addEventListener('click', evento => {
+		const botao = evento.target.closest('button')
+		if (!botao) return
+		gravar(CHAVE_TEMA, botao.dataset.modo)
+		aplicarTema(botao.dataset.modo)
+		registrar('info', `Modo: ${botao.dataset.modo}`)
+		desenharTemas()   // as prévias mudam com o modo
+	})
+	$('#grade-temas').addEventListener('click', evento => {
+		const cartao = evento.target.closest('.tema-card')
+		if (!cartao) return
+		gravar(CHAVE_PALETA, cartao.dataset.temaId)
+		aplicarTema(ler(CHAVE_TEMA) || 'auto')
+		registrar('info', `Tema: ${cartao.dataset.temaId}`)
+		desenharTemas()
+	})
+	$('#cor-destaque').addEventListener('input', evento => {
+		gravar(CHAVE_COR, evento.target.value)
+		gravar(CHAVE_PALETA, 'personalizado')
+		aplicarTema(ler(CHAVE_TEMA) || 'auto')
+		// Só atualiza a prévia e a seleção (redesenhar tudo fecharia o seletor de cor).
+		const cartao = document.querySelector('[data-tema-id="personalizado"]')
+		if (cartao) cartao.outerHTML = cartaDoTema('personalizado', modoEscuro(ler(CHAVE_TEMA) || 'auto'), 'personalizado')
+		for (const outro of document.querySelectorAll('.tema-card')) outro.setAttribute('aria-pressed', outro.dataset.temaId === 'personalizado')
+	})
+	$('#cor-destaque').addEventListener('change', () => registrar('info', `Tema: personalizado (${ler(CHAVE_COR)})`))
+}
+
+/* ----- Logs ----- */
+const filtroLogs = { nivel: 'todos' }
+const ROTULO_NIVEL = { info: 'INFO', aviso: 'AVISO', erro: 'ERRO' }
+const dataHora = t => new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+
+function infoDoSistema() {
+	const apk = versaoInstaladaDoApk()
+	return [
+		['Versão do app', VERSAO_APP],
+		['Onde roda', apk ? `App Android 1.${apk}` : 'Navegador'],
+		['Conta', usuario ? 'conectada' : 'não conectada'],
+		['Internet', navigator.onLine ? 'conectado' : 'sem conexão'],
+		['Modo offline', navigator.serviceWorker?.controller ? 'ativo' : 'inativo'],
+		['Tela', `${window.innerWidth}×${window.innerHeight} (${window.devicePixelRatio || 1}x)`],
+		['Cartas marcadas', Object.values(colecao).reduce((soma, s) => soma + s.size, 0)],
+		['Aparelho', navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 110)],
+	]
+}
+
+function logsFiltrados() {
+	return logs.filter(l => filtroLogs.nivel === 'todos' || (filtroLogs.nivel === 'erro' ? l.n === 'erro' : l.n !== 'info'))
+}
+
+function textoDosLogs() {
+	const cabecalho = infoDoSistema().map(([rotulo, valor]) => `${rotulo}: ${valor}`).join('\n')
+	const linhas = logs.map(l => `[${new Date(l.t).toISOString().replace('T', ' ').slice(0, 19)}] ${ROTULO_NIVEL[l.n] || l.n} ${l.m}${l.d ? `\n    ${l.d}` : ''}`)
+	return `Coleção TCG - relatório de logs\nGerado em: ${new Date().toISOString()}\n${cabecalho}\n\n${linhas.join('\n') || '(sem registros)'}\n`
+}
+
+function atualizarListaLogs() {
+	const lista = $('#lista-logs')
+	if (!lista) return
+	const itens = logsFiltrados().slice().reverse()
+	lista.innerHTML = itens.length
+		? itens.map(l => `<li class="log ${l.n}"><time>${dataHora(l.t)}</time><span class="nivel">${ROTULO_NIVEL[l.n] || l.n}</span>${escapar(l.m)}${l.d ? `<div class="detalhe">${escapar(l.d)}</div>` : ''}</li>`).join('')
+		: '<li class="vazio">Nenhum registro por aqui.</li>'
+	const contagem = (nivel) => logs.filter(l => nivel === 'todos' ? true : nivel === 'erro' ? l.n === 'erro' : l.n !== 'info').length
+	for (const botao of document.querySelectorAll('#filtro-logs button')) {
+		botao.classList.toggle('ativo', botao.dataset.nivel === filtroLogs.nivel)
+		botao.textContent = `${{ todos: 'Todos', problemas: 'Avisos e erros', erro: 'Erros' }[botao.dataset.nivel]} (${contagem(botao.dataset.nivel)})`
+	}
+}
+
+async function copiarTexto(texto) {
+	try {
+		await navigator.clipboard.writeText(texto)
+		return true
+	} catch {
+		const campo = document.createElement('textarea')
+		campo.value = texto
+		campo.style.position = 'fixed'
+		campo.style.opacity = '0'
+		document.body.appendChild(campo)
+		campo.select()
+		const ok = document.execCommand('copy')
+		campo.remove()
+		return ok
+	}
+}
+
+function desenharLogs() {
+	$('#conteudo').innerHTML = `
+		<dl class="logs-info">${infoDoSistema().map(([r, v]) => `<dt>${escapar(r)}</dt><dd>${escapar(v)}</dd>`).join('')}</dl>
+		<p class="dica">Os logs ficam só neste aparelho. Se precisar de ajuda, copie ou compartilhe e envie para quem for te ajudar.</p>
+		<div class="logs-acoes">
+			<button class="botao secundario" id="logs-copiar">Copiar</button>
+			<button class="botao secundario" id="logs-exportar">Compartilhar</button>
+			<button class="botao secundario" id="logs-limpar">Limpar</button>
+		</div>
+		<div class="segmentos" id="filtro-logs">
+			<button data-nivel="todos"></button><button data-nivel="problemas"></button><button data-nivel="erro"></button>
+		</div>
+		<ul class="lista-logs" id="lista-logs"></ul>`
+	atualizarListaLogs()
+	$('#filtro-logs').addEventListener('click', evento => {
+		const botao = evento.target.closest('button')
+		if (!botao) return
+		filtroLogs.nivel = botao.dataset.nivel
+		atualizarListaLogs()
+	})
+	$('#logs-copiar').addEventListener('click', async () => avisar(await copiarTexto(textoDosLogs()) ? 'Logs copiados.' : 'Não foi possível copiar.'))
+	$('#logs-exportar').addEventListener('click', async () => {
+		const resultado = await entregarArquivo(`colecao-tcg-logs-${new Date().toISOString().slice(0, 10)}.txt`, textoDosLogs(), 'text/plain', 'Logs da Coleção TCG')
+		if (resultado === 'baixado') avisar('Logs baixados.')
+		else if (resultado === 'erro') avisar('Não foi possível compartilhar os logs.')
+	})
+	$('#logs-limpar').addEventListener('click', () => {
+		if (!logs.length || !confirm('Apagar todos os registros de logs deste aparelho?')) return
+		logs = []
+		gravar(CHAVE_LOGS, '[]')
+		atualizarListaLogs()
+		avisar('Logs apagados.')
+	})
+}
+
 /* ---------- Tela: um set (grade de cartas) ---------- */
 function telaSet(setId) {
 	const set = dados.sets.find(s => s.id === setId)
@@ -1045,6 +1262,7 @@ function rotaAtual() {
 	const partes = location.hash.replace(/^#\/?/, '').split('/')
 	if (partes[0] === 'set') return { aba: 'colecoes', setId: decodeURIComponent(partes[1] || '') }
 	if (partes[0] === 'colecoes') return { aba: 'colecoes' }
+	if (partes[0] === 'configuracoes') return { aba: 'configuracoes', sub: partes[1] === 'logs' ? 'logs' : 'temas' }
 	return { aba: 'pesquisa' }
 }
 
@@ -1057,9 +1275,10 @@ function navegar() {
 	if (!history.state?.app) history.replaceState({ app: true }, '')
 	$('#gaveta').hidden = true
 	$('#escolha').hidden = true
-	const { setId, aba } = rotaAtual()
+	const { setId, aba, sub } = rotaAtual()
 	if (setId) telaSet(setId)
 	else if (aba === 'colecoes') telaColecoes()
+	else if (aba === 'configuracoes') telaConfiguracoes(sub)
 	else telaPesquisa()
 	marcarAbaNaGaveta(aba)
 	window.scrollTo(0, 0)
@@ -1143,6 +1362,20 @@ function fecharGaveta(veioDoHistorico = false) {
 	if (!veioDoHistorico) liberarSobreposicao()
 }
 
+// Vai para outra tela a partir da gaveta ou do menu: a entrada de histórico da sobreposição
+// vira a da nova tela, assim o voltar do celular não passa por ela.
+function irParaRotaFechandoSobreposicao(destino) {
+	$('#gaveta').hidden = true
+	$('#menu').hidden = true
+	if (entradasDeSobreposicao > 0) {
+		entradasDeSobreposicao--
+		history.replaceState({ app: true }, '', destino)
+		navegar()
+	} else {
+		location.hash = destino
+	}
+}
+
 $('#abrir-gaveta').addEventListener('click', abrirGaveta)
 $('#gaveta').addEventListener('click', evento => {
 	if (evento.target.id === 'gaveta') fecharGaveta()
@@ -1152,22 +1385,13 @@ for (const item of document.querySelectorAll('.gaveta-item')) {
 		evento.preventDefault()
 		const destino = item.getAttribute('href')
 		if (item.dataset.aba === rotaAtual().aba) { fecharGaveta(); return }
-		// A entrada de histórico da gaveta vira a da nova aba: o voltar não passa pela gaveta.
-		$('#gaveta').hidden = true
-		if (entradasDeSobreposicao > 0) {
-			entradasDeSobreposicao--
-			history.replaceState({ app: true }, '', destino)
-			navegar()
-		} else {
-			location.hash = destino
-		}
+		irParaRotaFechandoSobreposicao(destino)
 	})
 }
 
 /* ---------- Menu: backup e tema ---------- */
 function abrirMenu() {
 	if (!$('#menu').hidden) return
-	marcarTemaNoMenu()
 	configurarSecaoApk()
 	$('#menu').hidden = false
 	registrarSobreposicao()
@@ -1180,40 +1404,32 @@ function fecharMenu(veioDoHistorico = false) {
 $('#abrir-menu').addEventListener('click', abrirMenu)
 $('#status-nuvem').addEventListener('click', abrirMenu)
 $('#fechar-menu').addEventListener('click', () => fecharMenu())
+$('#menu-config').addEventListener('click', () => irParaRotaFechandoSobreposicao('#/configuracoes'))
 $('#menu').addEventListener('click', evento => {
 	if (evento.target.id === 'menu') fecharMenu()
 })
 
-$('#exportar').addEventListener('click', async () => {
-	const cartas = colecaoComoObjeto()
-	const quantidade = Object.values(cartas).reduce((soma, lista) => soma + lista.length, 0)
-	const backup = { app: 'minha-colecao-tcg', versao: 1, exportadoEm: new Date().toISOString(), cartas }
-	const nome = `colecao-tcg-${new Date().toISOString().slice(0, 10)}.json`
-	const texto = JSON.stringify(backup, null, 1)
-
+// Entrega um arquivo de texto ao usuário: menu de compartilhar (Android/celular) ou download.
+// Devolve 'compartilhado', 'baixado', 'cancelado' ou 'erro'.
+async function entregarArquivo(nome, texto, tipo, titulo) {
 	// Dentro do app Android: salva o arquivo e abre o menu de compartilhar do Android.
 	const nativo = window.Capacitor?.isNativePlatform?.() && window.Capacitor.Plugins
 	if (nativo?.Filesystem && nativo?.Share) {
 		try {
 			const { uri } = await nativo.Filesystem.writeFile({ path: nome, data: texto, directory: 'CACHE', encoding: 'utf8' })
-			await nativo.Share.share({ title: 'Backup da coleção', files: [uri] })
-			avisar(`Backup com ${quantidade} cartas exportado.`)
+			await nativo.Share.share({ title: titulo, files: [uri] })
+			return 'compartilhado'
 		} catch (erro) {
-			if (!/cancel/i.test(erro?.message || '')) avisar('Não foi possível exportar o backup.')
+			return /cancel/i.test(erro?.message || '') ? 'cancelado' : 'erro'
 		}
-		return
 	}
-
-	const arquivo = new File([texto], nome, { type: 'application/json' })
-
-	// No celular, abre o menu de compartilhar (salvar no Drive, mandar no WhatsApp...).
+	const arquivo = new File([texto], nome, { type: tipo })
 	if (navigator.canShare?.({ files: [arquivo] })) {
 		try {
-			await navigator.share({ files: [arquivo], title: 'Backup da coleção' })
-			avisar(`Backup com ${quantidade} cartas exportado.`)
-			return
+			await navigator.share({ files: [arquivo], title: titulo })
+			return 'compartilhado'
 		} catch (erro) {
-			if (erro.name === 'AbortError') return
+			if (erro.name === 'AbortError') return 'cancelado'
 		}
 	}
 	const link = document.createElement('a')
@@ -1221,7 +1437,19 @@ $('#exportar').addEventListener('click', async () => {
 	link.download = nome
 	link.click()
 	setTimeout(() => URL.revokeObjectURL(link.href), 1000)
-	avisar(`Backup com ${quantidade} cartas baixado.`)
+	return 'baixado'
+}
+
+$('#exportar').addEventListener('click', async () => {
+	const cartas = colecaoComoObjeto()
+	const quantidade = Object.values(cartas).reduce((soma, lista) => soma + lista.length, 0)
+	const backup = { app: 'minha-colecao-tcg', versao: 1, exportadoEm: new Date().toISOString(), cartas }
+	const nome = `colecao-tcg-${new Date().toISOString().slice(0, 10)}.json`
+	const resultado = await entregarArquivo(nome, JSON.stringify(backup, null, 1), 'application/json', 'Backup da coleção')
+	if (resultado === 'compartilhado') avisar(`Backup com ${quantidade} cartas exportado.`)
+	else if (resultado === 'baixado') avisar(`Backup com ${quantidade} cartas baixado.`)
+	else if (resultado === 'erro') avisar('Não foi possível exportar o backup.')
+	registrar(resultado === 'erro' ? 'erro' : 'info', `Backup da coleção: ${resultado} (${quantidade} cartas)`)
 })
 
 $('#importar').addEventListener('click', () => $('#arquivo-backup').click())
@@ -1254,30 +1482,68 @@ $('#arquivo-backup').addEventListener('change', async evento => {
 	}
 })
 
-function aplicarTema(tema) {
-	if (tema === 'claro' || tema === 'escuro') document.documentElement.dataset.tema = tema
-	else delete document.documentElement.dataset.tema
+/* ---------- Aparência: modo (claro/escuro) e temas de cores ---------- */
+const VARIAVEIS_TEMA = ['--fundo', '--superficie', '--superficie-2', '--texto', '--texto-fraco', '--borda', '--destaque', '--destaque-texto']
+// Cada tema muda só as variáveis de cor, uma versão para o modo claro e outra para o escuro.
+// O tema "Padrão" não muda nada (usa as cores do styles.css).
+const TEMAS = {
+	'padrao': { nome: 'Padrão', claro: { '--fundo': '#f4f5f8', '--superficie': '#ffffff', '--destaque': '#d6342c' }, escuro: { '--fundo': '#14161c', '--superficie': '#1e2129', '--destaque': '#f0524a' }, padrao: true },
+	'oceano': { nome: 'Oceano',
+		claro: { '--fundo': '#eaf3fb', '--superficie': '#ffffff', '--superficie-2': '#dde9f4', '--borda': '#c9dbea', '--texto': '#0e2233', '--texto-fraco': '#52687b', '--destaque': '#1478d4' },
+		escuro: { '--fundo': '#0a1520', '--superficie': '#11202f', '--superficie-2': '#1a3045', '--borda': '#24405a', '--texto': '#e5f0fa', '--texto-fraco': '#8aa3b8', '--destaque': '#4aa8ff' } },
+	'floresta': { nome: 'Floresta',
+		claro: { '--fundo': '#eef5ee', '--superficie': '#ffffff', '--superficie-2': '#e0ece0', '--borda': '#cfe0cf', '--texto': '#14261a', '--texto-fraco': '#566b5b', '--destaque': '#2b8a4e' },
+		escuro: { '--fundo': '#0c1710', '--superficie': '#132119', '--superficie-2': '#1d3226', '--borda': '#2a4a34', '--texto': '#e5f3e8', '--texto-fraco': '#8fae98', '--destaque': '#4cd68a' } },
+	'por-do-sol': { nome: 'Pôr do sol',
+		claro: { '--fundo': '#fdf2e9', '--superficie': '#ffffff', '--superficie-2': '#f9e4d2', '--borda': '#f0d3bb', '--texto': '#2a1a0e', '--texto-fraco': '#7a604a', '--destaque': '#e2650f' },
+		escuro: { '--fundo': '#1a110b', '--superficie': '#26180f', '--superficie-2': '#38241a', '--borda': '#4e3324', '--texto': '#fbeee2', '--texto-fraco': '#c2a58e', '--destaque': '#ff9242' } },
+	'sakura': { nome: 'Sakura',
+		claro: { '--fundo': '#fdf0f5', '--superficie': '#ffffff', '--superficie-2': '#f8e0ea', '--borda': '#f0cfdc', '--texto': '#2a1420', '--texto-fraco': '#7d5668', '--destaque': '#d1346f' },
+		escuro: { '--fundo': '#1a0f15', '--superficie': '#26151e', '--superficie-2': '#381f2c', '--borda': '#4f2c3e', '--texto': '#fbe9f1', '--texto-fraco': '#c79fb2', '--destaque': '#ff7aa8' } },
+	'meia-noite': { nome: 'Meia-noite',
+		claro: { '--fundo': '#f0f0f2', '--superficie': '#ffffff', '--superficie-2': '#e4e4e8', '--borda': '#d6d6dc', '--texto': '#111114', '--texto-fraco': '#5d5d66', '--destaque': '#6a5cff' },
+		escuro: { '--fundo': '#000000', '--superficie': '#0c0c0f', '--superficie-2': '#17171c', '--borda': '#26262d', '--texto': '#f2f2f5', '--texto-fraco': '#8e8e99', '--destaque': '#8b7dff' } },
+	'eletrico': { nome: 'Elétrico',
+		claro: { '--fundo': '#fbf8e8', '--superficie': '#ffffff', '--superficie-2': '#f4efc9', '--borda': '#e9e2b0', '--texto': '#22200c', '--texto-fraco': '#6e6a40', '--destaque': '#e6b800', '--destaque-texto': '#1b1b10' },
+		escuro: { '--fundo': '#14130a', '--superficie': '#201e0e', '--superficie-2': '#322f15', '--borda': '#4a4620', '--texto': '#fbf6d6', '--texto-fraco': '#bdb680', '--destaque': '#ffd21f', '--destaque-texto': '#1b1b10' } },
+	'mega': { nome: 'Mega',
+		claro: { '--fundo': '#f3effc', '--superficie': '#ffffff', '--superficie-2': '#e7dff8', '--borda': '#d8ccf0', '--texto': '#1d1530', '--texto-fraco': '#62588a', '--destaque': '#7a45d6' },
+		escuro: { '--fundo': '#110d1c', '--superficie': '#1a1429', '--superficie-2': '#2a2040', '--borda': '#3b2f58', '--texto': '#eee9fb', '--texto-fraco': '#a89fc9', '--destaque': '#a98aff' } },
+}
+const ORDEM_TEMAS = ['padrao', 'oceano', 'floresta', 'por-do-sol', 'sakura', 'meia-noite', 'eletrico', 'mega', 'personalizado']
+
+function modoEscuro(modo) {
+	return modo === 'escuro' || (modo !== 'claro' && matchMedia('(prefers-color-scheme: dark)').matches)
+}
+
+// Preto ou branco, o que ler melhor em cima da cor escolhida.
+function corDeTextoSobre(cor) {
+	const n = parseInt(String(cor).slice(1), 16) || 0
+	const brilho = (((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000
+	return brilho > 150 ? '#1b1d24' : '#ffffff'
+}
+
+// Variáveis do tema escolhido para o modo (claro ou escuro) de agora.
+function variaveisDoTema(id, escuro) {
+	const cor = ler(CHAVE_COR) || '#d6342c'
+	if (id === 'personalizado') return { '--destaque': cor, '--destaque-texto': corDeTextoSobre(cor) }
+	const tema = TEMAS[id]
+	if (!tema || tema.padrao) return {}
+	return tema[escuro ? 'escuro' : 'claro']
+}
+
+function aplicarTema(modo) {
+	const raiz = document.documentElement
+	if (modo === 'claro' || modo === 'escuro') raiz.dataset.tema = modo
+	else delete raiz.dataset.tema
+	const escuro = modoEscuro(modo)
+	for (const variavel of VARIAVEIS_TEMA) raiz.style.removeProperty(variavel)
+	const variaveis = variaveisDoTema(ler(CHAVE_PALETA) || 'padrao', escuro)
+	for (const [nome, valor] of Object.entries(variaveis)) raiz.style.setProperty(nome, valor)
 	// Cor da barra do sistema no celular
-	const escuro = tema === 'escuro' || (tema !== 'claro' && matchMedia('(prefers-color-scheme: dark)').matches)
-	for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
-		meta.content = escuro ? '#14161c' : '#f4f5f8'
-	}
+	const fundo = variaveis['--fundo'] || (escuro ? '#14161c' : '#f4f5f8')
+	for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.content = fundo
 }
-
-function marcarTemaNoMenu() {
-	const atual = ler(CHAVE_TEMA) || 'auto'
-	for (const botao of document.querySelectorAll('#tema button')) {
-		botao.classList.toggle('ativo', botao.dataset.tema === atual)
-	}
-}
-
-$('#tema').addEventListener('click', evento => {
-	const botao = evento.target.closest('button')
-	if (!botao) return
-	gravar(CHAVE_TEMA, botao.dataset.tema)
-	aplicarTema(botao.dataset.tema)
-	marcarTemaNoMenu()
-})
 
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => aplicarTema(ler(CHAVE_TEMA) || 'auto'))
 
@@ -1289,7 +1555,9 @@ const TEXTO_STATUS = {
 	desconectado: '',
 }
 
+let ultimoStatus = null
 function mostrarStatus(status) {
+	if (status !== ultimoStatus) { registrar(status === 'offline' ? 'aviso' : 'info', `Sincronização: ${status}`); ultimoStatus = status }
 	$('#status-nuvem').dataset.status = status
 	$('#status-nuvem').title = TEXTO_STATUS[status] || 'Entrar na conta'
 	$('#conta-status').textContent = TEXTO_STATUS[status]
@@ -1297,6 +1565,7 @@ function mostrarStatus(status) {
 
 function mostrarUsuario(novo) {
 	const entrou = !usuario && novo
+	if (!!usuario !== !!novo) registrar('info', novo ? 'Login feito' : 'Saiu da conta', novo?.email)
 	usuario = novo
 	$('#conta-carregando').hidden = true
 	$('#conta-desconectado').hidden = !!usuario
@@ -1554,11 +1823,13 @@ async function iniciar() {
 	try {
 		const resposta = await fetch('data/cartas.json')
 		dados = await resposta.json()
-	} catch {
+	} catch (erro) {
+		registrar('erro', 'Falha ao carregar a lista de cartas', textoDe(erro))
 		window.__appPronto = true
 		tela.innerHTML = '<p class="vazio">Não foi possível carregar a lista de cartas. Verifique a internet e tente de novo.</p>'
 		return
 	}
+	registrar('info', `App iniciado (${VERSAO_APP})`)
 	prepararHistorico()
 	navegar()
 	window.__appPronto = true
@@ -1569,11 +1840,12 @@ async function iniciar() {
 		// Quando sai uma versão nova, o service worker novo assume e recarrega a tela sozinho.
 		// Ao voltar para o app (ou abrir), confere se há novidade.
 		navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(registro => {
+			registro.addEventListener('updatefound', () => registrar('info', 'Atualização do app encontrada'))
 			registro.update().catch(() => {})
 			document.addEventListener('visibilitychange', () => {
 				if (document.visibilityState === 'visible') { registro.update().catch(() => {}); verificarVersaoDoApp() }
 			})
-		}).catch(() => { /* app funciona sem modo offline */ })
+		}).catch(erro => registrar('aviso', 'Modo offline indisponível', textoDe(erro)))
 	}
 }
 
