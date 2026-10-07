@@ -119,3 +119,22 @@ As séries antigas não têm dados em PT (na época não havia cartas em portugu
 | Sword & Shield | Silver Tempest | `swsh12` | Tempestade Prateada | 215/215 |
 | Sword & Shield | Sword & Shield | `swsh1` | Espada e Escudo | 216/216 |
 | Sword & Shield | Vivid Voltage | `swsh4` | Voltagem Vívida | 203/203 |
+
+## Escopo definido: só a série Megaevolução
+
+Decisão: o app vai mostrar **apenas** os sets principais da série Megaevolução,
+de *Megaevolução* até *Escuridão Absoluta* (o atual), em ordem de lançamento:
+
+| # | Set (PT) | Set (inglês) | ID no TCGdex | Lançamento | Cartas (oficiais / total com secretas) |
+|---|---|---|---|---|---|
+| 1 | Megaevolução | Mega Evolution | `me01` | 26/09/2025 | 132 / 188 |
+| 2 | Fogo Fantasmagórico | Phantasmal Flames | `me02` | 14/11/2025 | 94 / 130 |
+| 3 | Heróis Excelsos | Ascended Heroes | `me02.5` | 30/01/2026 | 217 / 295 |
+| 4 | Equilíbrio Perfeito | Perfect Order | `me03` | 27/03/2026 | 88 / 124 |
+| 5 | Caos Ascendente | Chaos Rising | `me04` | 22/05/2026 | 86 / 122 |
+| 6 | Escuridão Absoluta | Pitch Black | `me05` | 17/07/2026 | 84 / 120 |
+
+Todas as cartas desses 6 sets têm nome em português no TCGdex (100%).
+
+Ficaram de fora (dá para adicionar depois, se quiser): Promos MEP (`mep`),
+Energias (`mee`) e Celebração de 30 Anos (`30th`, `30th-c`).
