@@ -2,7 +2,7 @@
 //
 // Ao mudar algum arquivo do app, aumente o número da VERSAO para os celulares
 // baixarem a versão nova.
-const VERSAO = 'v5'
+const VERSAO = 'v6'
 const CACHE_APP = `colecao-app-${VERSAO}`
 const CACHE_IMAGENS = 'colecao-imagens'
 
@@ -48,17 +48,24 @@ self.addEventListener('fetch', evento => {
 	}
 })
 
-// Arquivos do app: responde na hora com o que está guardado e atualiza em segundo plano.
+// Arquivos do app: com internet, sempre a versão mais nova (e guarda uma cópia);
+// sem internet (ou se a rede demorar mais de 4 segundos), usa a cópia guardada.
 async function arquivoDoApp(request) {
 	const cache = await caches.open(CACHE_APP)
-	const guardado = await cache.match(request, { ignoreSearch: true })
-	const daRede = fetch(request)
-		.then(resposta => {
-			if (resposta.ok) cache.put(request, resposta.clone())
-			return resposta
-		})
-		.catch(() => null)
-	return guardado || (await daRede) || (await cache.match('index.html')) || Response.error()
+	const daRede = fetch(request, { cache: 'no-cache' }).then(resposta => {
+		if (resposta.ok) cache.put(request, resposta.clone())
+		return resposta
+	})
+	const guardado = () => cache.match(request, { ignoreSearch: true })
+		.then(copia => copia || cache.match('index.html'))
+	const limite = new Promise(resolver => setTimeout(resolver, 4000))
+	try {
+		const resposta = await Promise.race([daRede, limite.then(guardado)])
+		if (resposta) return resposta
+		return await daRede
+	} catch {
+		return (await guardado()) || Response.error()
+	}
 }
 
 // Imagens das cartas: se já baixou uma vez, usa a cópia guardada.

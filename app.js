@@ -761,7 +761,20 @@ async function iniciar() {
 	verificarVersaoDoApp()
 
 	if ('serviceWorker' in navigator) {
-		navigator.serviceWorker.register('sw.js').catch(() => { /* app funciona sem modo offline */ })
+		// Atualização automática: quando sai uma versão nova do app, o service worker novo
+		// assume e a página recarrega sozinha. Ao voltar para o app, confere se há novidade.
+		const tinhaVersaoAnterior = !!navigator.serviceWorker.controller
+		let recarregou = false
+		navigator.serviceWorker.addEventListener('controllerchange', () => {
+			if (!tinhaVersaoAnterior || recarregou) return
+			recarregou = true
+			location.reload()
+		})
+		navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(registro => {
+			document.addEventListener('visibilitychange', () => {
+				if (document.visibilityState === 'visible') registro.update().catch(() => {})
+			})
+		}).catch(() => { /* app funciona sem modo offline */ })
 	}
 }
 
