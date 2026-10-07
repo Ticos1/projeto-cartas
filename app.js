@@ -13,7 +13,7 @@ const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v24'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v25'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -1001,13 +1001,13 @@ function cartaDoTema(id, escuro, ativo) {
 			<span class="previa-caixa" style="background:${variaveis['--superficie']}"></span>
 			<span class="previa-ponto" style="background:${variaveis['--destaque']}"></span>
 		</span>
-		<span class="tema-nome">${nome}<svg class="marca" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+		<span class="tema-nome">${TEMAS[id]?.set ? htmlIconeSet({ id: TEMAS[id].set, sigla: TEMAS[id].set }) : ''}<span class="tema-texto">${nome}</span><svg class="marca" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
 	</button>`
 }
 
 function desenharTemas() {
 	const modo = ler(CHAVE_TEMA) || 'auto'
-	const ativo = ler(CHAVE_PALETA) || 'padrao'
+	const ativo = idDoTema()
 	const escuro = modoEscuro(modo)
 	$('#conteudo').innerHTML = `
 		<h2 class="titulo-secao">Modo</h2>
@@ -1018,7 +1018,8 @@ function desenharTemas() {
 		</div>
 		<p class="dica">Automático segue o modo do seu celular.</p>
 
-		<h2 class="titulo-secao">Temas</h2>
+		<h2 class="titulo-secao">Temas das coleções</h2>
+		<p class="dica">Cada coleção tem o seu tema, com as cores da arte dela.</p>
 		<div class="grade-temas" id="grade-temas">${ORDEM_TEMAS.map(id => cartaDoTema(id, escuro, ativo)).join('')}</div>
 
 		<h2 class="titulo-secao">Cor de destaque personalizada</h2>
@@ -1027,6 +1028,7 @@ function desenharTemas() {
 			<span>Escolha a cor dos botões e destaques<small>Vira o tema "Personalizado".</small></span>
 		</label>`
 
+	carregarLogosDentro($('#grade-temas'))
 	const marcarModo = () => {
 		for (const botao of document.querySelectorAll('#modo button')) botao.classList.toggle('ativo', botao.dataset.modo === (ler(CHAVE_TEMA) || 'auto'))
 	}
@@ -1486,31 +1488,53 @@ $('#arquivo-backup').addEventListener('change', async evento => {
 const VARIAVEIS_TEMA = ['--fundo', '--superficie', '--superficie-2', '--texto', '--texto-fraco', '--borda', '--destaque', '--destaque-texto']
 // Cada tema muda só as variáveis de cor, uma versão para o modo claro e outra para o escuro.
 // O tema "Padrão" não muda nada (usa as cores do styles.css).
+// Um tema para cada coleção, com as cores da arte dela. Cada paleta:
+// [fundo, superfície, superfície 2, borda, texto, texto fraco, destaque, texto sobre o destaque (opcional)]
+const montarPaleta = p => ({ '--fundo': p[0], '--superficie': p[1], '--superficie-2': p[2], '--borda': p[3], '--texto': p[4], '--texto-fraco': p[5], '--destaque': p[6], ...(p[7] ? { '--destaque-texto': p[7] } : {}) })
+const temaDoSet = (nome, set, claro, escuro) => ({ nome, set, claro: montarPaleta(claro), escuro: montarPaleta(escuro) })
 const TEMAS = {
 	'padrao': { nome: 'Padrão', claro: { '--fundo': '#f4f5f8', '--superficie': '#ffffff', '--destaque': '#d6342c' }, escuro: { '--fundo': '#14161c', '--superficie': '#1e2129', '--destaque': '#f0524a' }, padrao: true },
-	'oceano': { nome: 'Oceano',
-		claro: { '--fundo': '#eaf3fb', '--superficie': '#ffffff', '--superficie-2': '#dde9f4', '--borda': '#c9dbea', '--texto': '#0e2233', '--texto-fraco': '#52687b', '--destaque': '#1478d4' },
-		escuro: { '--fundo': '#0a1520', '--superficie': '#11202f', '--superficie-2': '#1a3045', '--borda': '#24405a', '--texto': '#e5f0fa', '--texto-fraco': '#8aa3b8', '--destaque': '#4aa8ff' } },
-	'floresta': { nome: 'Floresta',
-		claro: { '--fundo': '#eef5ee', '--superficie': '#ffffff', '--superficie-2': '#e0ece0', '--borda': '#cfe0cf', '--texto': '#14261a', '--texto-fraco': '#566b5b', '--destaque': '#2b8a4e' },
-		escuro: { '--fundo': '#0c1710', '--superficie': '#132119', '--superficie-2': '#1d3226', '--borda': '#2a4a34', '--texto': '#e5f3e8', '--texto-fraco': '#8fae98', '--destaque': '#4cd68a' } },
-	'por-do-sol': { nome: 'Pôr do sol',
-		claro: { '--fundo': '#fdf2e9', '--superficie': '#ffffff', '--superficie-2': '#f9e4d2', '--borda': '#f0d3bb', '--texto': '#2a1a0e', '--texto-fraco': '#7a604a', '--destaque': '#e2650f' },
-		escuro: { '--fundo': '#1a110b', '--superficie': '#26180f', '--superficie-2': '#38241a', '--borda': '#4e3324', '--texto': '#fbeee2', '--texto-fraco': '#c2a58e', '--destaque': '#ff9242' } },
-	'sakura': { nome: 'Sakura',
-		claro: { '--fundo': '#fdf0f5', '--superficie': '#ffffff', '--superficie-2': '#f8e0ea', '--borda': '#f0cfdc', '--texto': '#2a1420', '--texto-fraco': '#7d5668', '--destaque': '#d1346f' },
-		escuro: { '--fundo': '#1a0f15', '--superficie': '#26151e', '--superficie-2': '#381f2c', '--borda': '#4f2c3e', '--texto': '#fbe9f1', '--texto-fraco': '#c79fb2', '--destaque': '#ff7aa8' } },
-	'meia-noite': { nome: 'Meia-noite',
-		claro: { '--fundo': '#f0f0f2', '--superficie': '#ffffff', '--superficie-2': '#e4e4e8', '--borda': '#d6d6dc', '--texto': '#111114', '--texto-fraco': '#5d5d66', '--destaque': '#6a5cff' },
-		escuro: { '--fundo': '#000000', '--superficie': '#0c0c0f', '--superficie-2': '#17171c', '--borda': '#26262d', '--texto': '#f2f2f5', '--texto-fraco': '#8e8e99', '--destaque': '#8b7dff' } },
-	'eletrico': { nome: 'Elétrico',
-		claro: { '--fundo': '#fbf8e8', '--superficie': '#ffffff', '--superficie-2': '#f4efc9', '--borda': '#e9e2b0', '--texto': '#22200c', '--texto-fraco': '#6e6a40', '--destaque': '#e6b800', '--destaque-texto': '#1b1b10' },
-		escuro: { '--fundo': '#14130a', '--superficie': '#201e0e', '--superficie-2': '#322f15', '--borda': '#4a4620', '--texto': '#fbf6d6', '--texto-fraco': '#bdb680', '--destaque': '#ffd21f', '--destaque-texto': '#1b1b10' } },
-	'mega': { nome: 'Mega',
-		claro: { '--fundo': '#f3effc', '--superficie': '#ffffff', '--superficie-2': '#e7dff8', '--borda': '#d8ccf0', '--texto': '#1d1530', '--texto-fraco': '#62588a', '--destaque': '#7a45d6' },
-		escuro: { '--fundo': '#110d1c', '--superficie': '#1a1429', '--superficie-2': '#2a2040', '--borda': '#3b2f58', '--texto': '#eee9fb', '--texto-fraco': '#a89fc9', '--destaque': '#a98aff' } },
+	// Megaevolução: violeta da energia mega
+	'me01': temaDoSet('Megaevolução', 'me01',
+		['#f3effc', '#ffffff', '#e7dff8', '#d8ccf0', '#1d1530', '#62588a', '#7a45d6'],
+		['#110d1c', '#1a1429', '#2a2040', '#3b2f58', '#eee9fb', '#a89fc9', '#a98aff']),
+	// Fogo Fantasmagórico: brasa laranja com sombra arroxeada
+	'me02': temaDoSet('Fogo Fantasmagórico', 'me02',
+		['#fdf1ea', '#ffffff', '#f9e0d3', '#f0cdbb', '#2a140d', '#7d5a4d', '#e0521b'],
+		['#190c10', '#251319', '#38202a', '#4f2c3a', '#fbebe6', '#c9a0a6', '#ff7a3d']),
+	// Heróis Excelsos: azul celestial
+	'me02.5': temaDoSet('Heróis Excelsos', 'me02.5',
+		['#edf4fd', '#ffffff', '#dce9f9', '#c8dbf2', '#0f1f35', '#52698a', '#2a7de1'],
+		['#0a1424', '#101d33', '#192d4c', '#243f66', '#e8f1fc', '#8ea6c7', '#5aa2ff']),
+	// Equilíbrio Perfeito: verde-água, simetria e calma
+	'me03': temaDoSet('Equilíbrio Perfeito', 'me03',
+		['#eaf6f4', '#ffffff', '#d9eeea', '#c4e0db', '#0d2523', '#4f7270', '#0f9a8e'],
+		['#09171a', '#0f2428', '#17373b', '#22504f', '#e3f4f2', '#86b1ae', '#34d3c3', '#06201e']),
+	// Caos Ascendente: magenta intenso sobre vinho
+	'me04': temaDoSet('Caos Ascendente', 'me04',
+		['#fcedf4', '#ffffff', '#f7dae8', '#eec3d9', '#2b0d1e', '#80566d', '#c4177d'],
+		['#190a14', '#26111f', '#3a1a30', '#53264a', '#fbe8f3', '#c99ab5', '#ff4fb0', '#2a0618']),
+	// Escuridão Absoluta: abismo quase preto com brilho azul-prata
+	'me05': temaDoSet('Escuridão Absoluta', 'me05',
+		['#eceef4', '#ffffff', '#dde0ea', '#cacfdd', '#0f1220', '#575d78', '#3c4a8a'],
+		['#000000', '#0a0b12', '#141622', '#232638', '#e9ebf5', '#8a90ab', '#8da2ff', '#080a18']),
+	// Celebração de 30 Anos: amarelo festivo
+	'30th': temaDoSet('Celebração de 30 Anos', '30th',
+		['#fdf8e3', '#ffffff', '#f8efc2', '#eddf9c', '#2a2306', '#78692a', '#e8ad00', '#1b1706'],
+		['#17130a', '#231d0e', '#373015', '#4f4520', '#fcf3d0', '#c2b57a', '#ffc926', '#1b1706']),
+	// Coleção Clássica: verde de Game Boy, nostalgia
+	'30th-c': temaDoSet('Coleção Clássica de 30 Anos', '30th-c',
+		['#eef2e0', '#fbfdf3', '#dfe8c7', '#cbd8aa', '#18200a', '#5b6b3a', '#4f7a1e'],
+		['#0e1307', '#161d0b', '#222d13', '#33421d', '#e9f1d2', '#9aab72', '#a8d23c', '#10180a']),
+	// Promos MEP: grafite e prata da estrela preta
+	'mep': temaDoSet('Promos MEP', 'mep',
+		['#f0f1f3', '#ffffff', '#e3e5e9', '#d0d3da', '#13151a', '#5c616c', '#454b59'],
+		['#0d0e11', '#17181d', '#23252c', '#33363f', '#eceef2', '#9296a2', '#c3c8d4', '#101216']),
 }
-const ORDEM_TEMAS = ['padrao', 'oceano', 'floresta', 'por-do-sol', 'sakura', 'meia-noite', 'eletrico', 'mega', 'personalizado']
+const ORDEM_TEMAS = ['padrao', 'me01', 'me02', 'me02.5', 'me03', 'me04', 'me05', '30th', '30th-c', 'mep', 'personalizado']
+// Temas antigos (v24) → o tema de coleção mais parecido
+const TEMAS_ANTIGOS = { oceano: 'me02.5', floresta: 'me03', 'por-do-sol': 'me02', sakura: 'me04', 'meia-noite': 'me05', eletrico: '30th', mega: 'me01' }
+const idDoTema = () => { const id = ler(CHAVE_PALETA) || 'padrao'; return TEMAS_ANTIGOS[id] || id }
 
 function modoEscuro(modo) {
 	return modo === 'escuro' || (modo !== 'claro' && matchMedia('(prefers-color-scheme: dark)').matches)
@@ -1538,7 +1562,7 @@ function aplicarTema(modo) {
 	else delete raiz.dataset.tema
 	const escuro = modoEscuro(modo)
 	for (const variavel of VARIAVEIS_TEMA) raiz.style.removeProperty(variavel)
-	const variaveis = variaveisDoTema(ler(CHAVE_PALETA) || 'padrao', escuro)
+	const variaveis = variaveisDoTema(idDoTema(), escuro)
 	for (const [nome, valor] of Object.entries(variaveis)) raiz.style.setProperty(nome, valor)
 	// Cor da barra do sistema no celular
 	const fundo = variaveis['--fundo'] || (escuro ? '#14161c' : '#f4f5f8')

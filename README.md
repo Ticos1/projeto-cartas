@@ -155,5 +155,5 @@ Quem desligou as animações no celular vê só um clarão rápido, sem moviment
 
 ## Configurações (Temas e Logs)
 Aba **Configurações** (☰ ou ⋮ → "Temas, modo claro/escuro e logs").
-- **Temas**: Modo Automático/Claro/Escuro, 8 temas prontos (Padrão, Oceano, Floresta, Pôr do sol, Sakura, Meia-noite, Elétrico, Mega) e uma **cor personalizada**. A escolha fica salva no aparelho.
+- **Temas**: Modo Automático/Claro/Escuro, um tema para cada coleção (Megaevolução, Fogo Fantasmagórico, Heróis Excelsos, Equilíbrio Perfeito, Caos Ascendente, Escuridão Absoluta, Celebração de 30 Anos, Clássica de 30 Anos, Promos MEP) mais o Padrão e uma **cor personalizada**. A escolha fica salva no aparelho.
 - **Logs**: registro de erros, avisos e eventos do app (início, login, sincronização, atualizações). Dá para filtrar, copiar, compartilhar como arquivo e limpar. Ficam só no aparelho (máximo de 300).

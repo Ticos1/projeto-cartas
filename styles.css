@@ -772,6 +772,8 @@ main {
 .tema-previa .previa-caixa { display: block; height: 22px; margin-top: 9px; border-radius: 6px; }
 .tema-previa .previa-ponto { position: absolute; top: 8px; right: 8px; width: 14px; height: 14px; border-radius: 50%; }
 .tema-nome { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 8px; font-weight: 600; font-size: .92rem; }
+.tema-nome .tema-texto { flex: 1; min-width: 0; line-height: 1.15; font-size: .84rem; }
+.tema-nome .icone-logo { width: 38px; height: 24px; }
 .tema-nome .marca { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--destaque); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
 .tema-card[aria-pressed="true"] .marca { opacity: 1; }
 .cor-personalizada {
