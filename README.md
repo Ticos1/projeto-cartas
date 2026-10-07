@@ -1,5 +1,13 @@
 # Minha Coleção TCG (PT-BR)
 
+| | |
+|---|---|
+| 🌐 **Site (PC e celular)** | **https://ticos1.github.io/projeto-cartas/** |
+| 📲 **App Android (APK)** | **[Baixar colecao-tcg.apk](https://github.com/Ticos1/projeto-cartas/releases/latest/download/colecao-tcg.apk)** |
+
+> Para instalar o APK: abra o link no celular Android, toque no arquivo baixado e, se o
+> Android pedir, permita "instalar apps desta fonte".
+
 App (PWA) para marcar as cartas Pokémon TCG da Copag que eu tenho e ver o que falta
 em cada set da série **Megaevolução**.
 
