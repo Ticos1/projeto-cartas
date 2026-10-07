@@ -10,7 +10,7 @@ const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v17'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v18'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -319,6 +319,7 @@ let cartaAberta = null
 let toqueComecouNoZoom = false   // o toque atual começou dentro da carta aberta?
 
 let animandoZoom = false
+let aberturaDoZoom = 0   // qual abertura da carta grande está valendo
 const semAnimacao = () => matchMedia('(prefers-reduced-motion: reduce)').matches
 
 // Posição da carta da grade em relação à carta grande: usada para a carta "sair" da grade.
@@ -356,7 +357,9 @@ function abrirZoom(botao) {
 	$('#zoom').hidden = false
 	registrarSobreposicao()
 
-	if (semAnimacao()) return
+	pararEfeitos()
+	if (semAnimacao()) { iniciarEfeitos(carta.raridade, true); return }
+	const idAbertura = ++aberturaDoZoom
 	const origem = transformacaoDaGrade(botao) || 'scale(.3)'
 	animandoZoom = true
 	$('#zoom').animate([{ backgroundColor: 'rgba(0,0,0,0)' }, { backgroundColor: 'rgba(0,0,0,.8)' }], { duration: 350 })
@@ -366,6 +369,10 @@ function abrirZoom(botao) {
 	], { duration: 950, easing: 'cubic-bezier(.2, .7, .25, 1)' }).finished
 		.catch(() => { /* animação interrompida (ex.: começou a rolar) */ })
 		.finally(() => { animandoZoom = false })
+		.then(() => {
+			// A carta parou de frente: solta os efeitos da raridade (se ainda estiver aberta).
+			if (idAbertura === aberturaDoZoom && !$('#zoom').hidden) iniciarEfeitos(carta.raridade)
+		})
 	$('#zoom-detalhes').animate([
 		{ opacity: 0, transform: 'translateY(12px)' },
 		{ opacity: 0, transform: 'translateY(12px)', offset: .6 },
@@ -377,6 +384,8 @@ function abrirZoom(botao) {
 async function fecharZoom(animar = true, forcar = false, veioDoHistorico = false) {
 	if ($('#zoom').hidden || (animandoZoom && !forcar)) return
 	if (forcar) animandoZoom = false
+	aberturaDoZoom++
+	pararEfeitos()
 	const destino = animar && !semAnimacao() && document.body.contains(cartaAberta) ? transformacaoDaGrade(cartaAberta) : null
 	if (destino) {
 		animandoZoom = true
@@ -393,6 +402,164 @@ async function fecharZoom(animar = true, forcar = false, veioDoHistorico = false
 	$('#zoom').hidden = true
 	for (const el of [$('#zoom'), $('#zoom-giro'), $('#zoom-detalhes')]) el.getAnimations().forEach(a => a.cancel())
 	if (!veioDoHistorico) liberarSobreposicao()
+}
+
+/* ---------- Efeitos de raridade ---------- */
+// Quando a carta termina de girar e para de frente, a raridade dela solta efeitos:
+// brilho que passa, halo colorido, reflexo holográfico e partículas. Quanto mais rara, mais efeito.
+const ARCO = ['#ff5ea8', '#ffd45e', '#6dffb0', '#5ec8ff', '#b48cff']
+const EFEITOS_RARIDADE = {
+	'Incomum':                 { brilho: 1 },
+	'Rara':                    { brilho: 1, halo: '#c9d6ea', particulas: { n: 14, cores: ['#ffffff', '#c9d6ea'] } },
+	'Promo':                   { brilho: 1, halo: '#8fd0ff', particulas: { n: 14, cores: ['#ffffff', '#8fd0ff'] } },
+	'Rara Dupla':              { brilho: 2, halo: '#ffd24d', particulas: { n: 28, cores: ['#fff3b0', '#ffd24d', '#ffffff'] } },
+	'Ultra Rara':              { brilho: 2, halo: '#ffbf1f', pulso: true, particulas: { n: 46, estrelas: 10, cores: ['#fff3b0', '#ffbf1f', '#ff9d00'] } },
+	'Rara Ilustrada':          { brilho: 1, holo: true, halo: '#8fe6ff', pulso: true, particulas: { n: 40, estrelas: 12, cores: ARCO } },
+	'Rara Ilustrada Especial': { brilho: 2, holo: true, halo: '#c08cff', pulso: true, flash: 'rgba(192,140,255,.4)', particulas: { n: 64, estrelas: 22, chuva: true, cores: ARCO } },
+	'Mega Rara Hiper':         { brilho: 3, holo: 'ouro', halo: '#ffb300', pulso: true, flash: 'rgba(255,200,60,.5)', particulas: { n: 90, estrelas: 28, chuva: true, cores: ['#fff1a8', '#ffd24d', '#ffb300', '#ff8a00'] } },
+	'Rara Mega Ataque':        { brilho: 2, halo: '#ff5a3c', pulso: true, particulas: { n: 46, estrelas: 6, cores: ['#ffd1a8', '#ff8a3c', '#ff3c2a'] } },
+	'Rara Futurista':          { brilho: 2, holo: true, halo: '#3cf0ff', pulso: true, particulas: { n: 40, estrelas: 10, cores: ['#d9fcff', '#3cf0ff', '#5a8cff'] } },
+	'Rara Pikachu':            { brilho: 2, halo: '#ffe14a', pulso: true, particulas: { n: 40, raios: true, cores: ['#fff7b0', '#ffe14a', '#ffb800'] } },
+	'Rara RGB':                { brilho: 2, holo: true, halo: '#ff5ea8', pulso: true, particulas: { n: 56, estrelas: 16, cores: ARCO } },
+}
+const CLASSES_EFEITO = ['ef-ativo', 'ef-com-holo', 'ef-holo-ouro', 'ef-pulso']
+let idEfeito = 0          // muda a cada início/parada: partículas antigas se encerram sozinhas
+let quadroParticulas = 0
+
+function pararEfeitos() {
+	idEfeito++
+	cancelAnimationFrame(quadroParticulas)
+	const canvas = $('#zoom-particulas')
+	if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
+	const caixa = document.querySelector('.carta-3d')
+	if (caixa) {
+		caixa.classList.remove(...CLASSES_EFEITO)
+		void caixa.offsetWidth   // para a animação poder recomeçar do zero
+	}
+}
+
+// parado = true: só o halo, sem movimento (quem desligou as animações do celular)
+function iniciarEfeitos(raridade, parado = false) {
+	pararEfeitos()
+	const config = EFEITOS_RARIDADE[raridade]
+	const caixa = document.querySelector('.carta-3d')
+	if (!config || !caixa) return
+	if (config.halo) caixa.style.setProperty('--ef-cor', config.halo)
+	caixa.style.setProperty('--ef-brilhos', parado ? 0 : config.brilho || 0)
+	caixa.classList.add('ef-ativo')
+	if (config.holo) caixa.classList.add('ef-com-holo')
+	if (config.holo === 'ouro') caixa.classList.add('ef-holo-ouro')
+	if (config.pulso) caixa.classList.add('ef-pulso')
+	if (parado) return
+	if (config.flash) $('#zoom').animate([{ backgroundColor: config.flash }, { backgroundColor: 'rgba(0,0,0,.8)' }], { duration: 650, easing: 'ease-out' })
+	if (config.particulas) dispararParticulas(config.particulas, caixa)
+}
+
+function dispararParticulas(config, caixa) {
+	const canvas = $('#zoom-particulas')
+	if (!canvas) return
+	const dpr = Math.min(window.devicePixelRatio || 1, 2)
+	const largura = window.innerWidth, altura = window.innerHeight
+	canvas.width = Math.round(largura * dpr)
+	canvas.height = Math.round(altura * dpr)
+	const ctx = canvas.getContext('2d')
+	ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+
+	const r = caixa.getBoundingClientRect()
+	const cx = r.left + r.width / 2, cy = r.top + r.height / 2
+	const sorte = (a, b) => a + Math.random() * (b - a)
+	const cor = () => config.cores[Math.floor(Math.random() * config.cores.length)]
+	const ps = []
+
+	for (let i = 0; i < config.n; i++) {   // faíscas: saem das bordas da carta, para fora
+		const ang = Math.random() * Math.PI * 2, v = sorte(90, 300)
+		ps.push({ t: 'faisca', idade: 0, vida: sorte(.9, 1.9), r: sorte(1.4, 3.4), cor: cor(), g: 160,
+			x: cx + Math.cos(ang) * r.width * sorte(.35, .52), y: cy + Math.sin(ang) * r.height * sorte(.35, .52),
+			vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - 30 })
+	}
+	for (let i = 0; i < (config.estrelas || 0); i++) {   // estrelinhas que brilham e sobem
+		ps.push({ t: 'estrela', idade: 0, vida: sorte(1.2, 2.4), r: sorte(6, 14), cor: cor(), atraso: sorte(0, .7),
+			x: cx + sorte(-.55, .55) * r.width, y: cy + sorte(-.55, .55) * r.height, vx: sorte(-14, 14), vy: sorte(-34, -8) })
+	}
+	if (config.chuva) {   // confete caindo do topo da tela
+		for (let i = 0; i < 40; i++) {
+			ps.push({ t: 'confete', idade: 0, vida: sorte(2.2, 3.4), r: sorte(3, 6), cor: cor(), atraso: sorte(0, .8),
+				x: sorte(0, largura), y: sorte(-altura * .3, -10), vx: sorte(-30, 30), vy: sorte(140, 300),
+				giro: sorte(0, 6.28), vgiro: sorte(-6, 6) })
+		}
+	}
+	if (config.raios) {   // raios em zigue-zague em volta da carta
+		for (let i = 0; i < 9; i++) {
+			const x = cx + sorte(-.62, .62) * r.width, y = cy + sorte(-.6, .6) * r.height, tam = sorte(18, 42)
+			const pontos = [[0, 0]]
+			for (let k = 1; k <= 5; k++) pontos.push([sorte(-.35, .35) * tam, k * tam / 5])
+			ps.push({ t: 'raio', idade: 0, vida: sorte(.12, .22), atraso: sorte(0, 1.4), cor: cor(), x, y, pontos })
+		}
+	}
+
+	const meu = idEfeito
+	let ultimo = performance.now()
+	const quadro = agora => {
+		if (meu !== idEfeito) return
+		const dt = Math.min((agora - ultimo) / 1000, .05)
+		ultimo = agora
+		ctx.clearRect(0, 0, largura, altura)
+		ctx.globalCompositeOperation = 'lighter'
+		let vivas = 0
+		for (const p of ps) {
+			if (p.atraso > 0) { p.atraso -= dt; vivas++; continue }
+			p.idade += dt
+			if (p.idade >= p.vida) continue
+			vivas++
+			const k = p.idade / p.vida
+			ctx.fillStyle = p.cor
+			ctx.strokeStyle = p.cor
+			if (p.t === 'faisca') {
+				p.vx *= 1 - .6 * dt
+				p.vy += p.g * dt
+				p.x += p.vx * dt
+				p.y += p.vy * dt
+				ctx.globalAlpha = (1 - k) * .25
+				ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 3, 0, 6.283); ctx.fill()
+				ctx.globalAlpha = 1 - k
+				ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (1 - .4 * k), 0, 6.283); ctx.fill()
+			} else if (p.t === 'estrela') {
+				p.x += p.vx * dt
+				p.y += p.vy * dt
+				ctx.globalAlpha = Math.sin(k * Math.PI) * (.65 + .35 * Math.sin(p.idade * 16))
+				const s = p.r * (.6 + .4 * Math.sin(k * Math.PI))
+				ctx.beginPath()
+				ctx.moveTo(p.x, p.y - s)
+				ctx.quadraticCurveTo(p.x, p.y, p.x + s, p.y)
+				ctx.quadraticCurveTo(p.x, p.y, p.x, p.y + s)
+				ctx.quadraticCurveTo(p.x, p.y, p.x - s, p.y)
+				ctx.quadraticCurveTo(p.x, p.y, p.x, p.y - s)
+				ctx.fill()
+			} else if (p.t === 'confete') {
+				p.vy += 40 * dt
+				p.x += (p.vx + Math.sin(p.idade * 4 + p.giro) * 40) * dt
+				p.y += p.vy * dt
+				p.giro += p.vgiro * dt
+				ctx.globalAlpha = Math.min(1, (p.vida - p.idade) * 2) * .9
+				ctx.save()
+				ctx.translate(p.x, p.y)
+				ctx.rotate(p.giro)
+				ctx.fillRect(-p.r, -p.r * .5, p.r * 2, p.r)
+				ctx.restore()
+			} else if (p.t === 'raio') {
+				ctx.globalAlpha = (1 - k) * (Math.random() > .3 ? 1 : .4)
+				ctx.lineWidth = 2
+				ctx.lineJoin = 'round'
+				ctx.beginPath()
+				p.pontos.forEach(([dx, dy], i) => (i ? ctx.lineTo(p.x + dx, p.y + dy) : ctx.moveTo(p.x, p.y)))
+				ctx.stroke()
+			}
+		}
+		ctx.globalAlpha = 1
+		if (vivas) quadroParticulas = requestAnimationFrame(quadro)
+		else ctx.clearRect(0, 0, largura, altura)
+	}
+	quadroParticulas = requestAnimationFrame(quadro)
 }
 
 /* ---------- Liga Pokémon ---------- */
@@ -655,6 +822,8 @@ function rotaAtual() {
 
 function navegar() {
 	$('#zoom').hidden = true
+	aberturaDoZoom++
+	pararEfeitos()
 	entradasDeSobreposicao = 0
 	// Toda tela que o app abre fica marcada como "do app" no histórico.
 	if (!history.state?.app) history.replaceState({ app: true }, '')

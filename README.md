@@ -126,3 +126,10 @@ celulares pegarem a versão nova.
   a permissão "Permitir desta fonte".
 - APKs antigos (sem a peça) e o navegador usam o link de download comum.
 - Cada versão é publicada com nome próprio (`colecao-tcg-1.N.apk`).
+
+## Efeitos de raridade
+
+Quando a carta termina de girar e para de frente, ela solta efeitos conforme a raridade
+(`EFEITOS_RARIDADE` em `app.js`): brilho que passa, halo colorido, reflexo holográfico e
+partículas. Comum não tem efeito. Para mudar ou criar um efeito, edite essa tabela.
+Quem desligou as animações no celular vê só um halo parado.

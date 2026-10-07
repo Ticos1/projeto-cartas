@@ -563,3 +563,67 @@ main {
 }
 .botao.comprar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 #zoom-liga .link { color: #c6cad3; font-size: .8rem; padding: 6px; }
+
+/* ---------- Efeitos de raridade (carta grande) ---------- */
+#zoom-particulas {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	z-index: 5;
+	pointer-events: none;
+}
+.carta-3d { position: relative; }
+.ef-halo, .ef-sobre { position: absolute; pointer-events: none; }
+.ef-halo {
+	inset: -2%;
+	z-index: 0;
+	border-radius: 7% / 5%;
+	opacity: 0;
+	box-shadow: 0 0 34px 12px var(--ef-cor, transparent), 0 0 90px 26px var(--ef-cor, transparent);
+}
+.ef-sobre {
+	inset: 0;
+	z-index: 2;
+	border-radius: 4.5% / 3.2%;
+	overflow: hidden;
+}
+.ef-holo, .ef-brilho { position: absolute; inset: 0; opacity: 0; }
+.ef-holo {
+	background: linear-gradient(115deg, #ff0080 0%, #ff8c00 18%, #ffe600 34%, #00ff95 50%, #00c8ff 66%, #7a5cff 82%, #ff0080 100%);
+	background-size: 300% 300%;
+	mix-blend-mode: color-dodge;
+}
+.ef-holo-ouro .ef-holo {
+	background: linear-gradient(115deg, #fff3b0, #ffb300 28%, #fff3b0 50%, #ff9d00 72%, #fff3b0);
+	background-size: 300% 300%;
+	mix-blend-mode: soft-light;
+}
+.ef-brilho {
+	inset: -30%;
+	background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, .8) 50%, transparent 58%);
+}
+
+.ef-ativo .ef-halo { animation: ef-halo-entra .7s ease-out forwards; }
+.ef-ativo.ef-pulso .ef-halo { animation: ef-halo-entra .7s ease-out forwards, ef-pulso 2.2s ease-in-out .7s infinite; }
+.ef-ativo.ef-com-holo .ef-holo { animation: ef-holo-passa 3.2s ease-in-out forwards; }
+.ef-ativo .ef-brilho { animation: ef-brilho-passa .95s ease-in-out .1s var(--ef-brilhos, 0); }
+
+@keyframes ef-halo-entra { from { opacity: 0; transform: scale(.94); } to { opacity: .85; transform: none; } }
+@keyframes ef-pulso { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+@keyframes ef-holo-passa {
+	0% { opacity: 0; background-position: 0% 30%; }
+	22% { opacity: .55; }
+	100% { opacity: .22; background-position: 100% 70%; }
+}
+@keyframes ef-brilho-passa {
+	from { transform: translateX(-70%); opacity: 1; }
+	to { transform: translateX(70%); opacity: 1; }
+}
+
+/* Quem pediu menos movimento no celular: só um brilho parado em volta da carta */
+@media (prefers-reduced-motion: reduce) {
+	.ef-ativo .ef-halo, .ef-ativo.ef-pulso .ef-halo { animation: none; opacity: .7; }
+	.ef-holo, .ef-brilho { display: none; }
+	#zoom-particulas { display: none; }
+}
