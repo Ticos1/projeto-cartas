@@ -30,14 +30,19 @@ jobs:
           node-version: 22
 
       # Guarda as imagens entre uma publicação e outra, para não baixar tudo de novo.
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: img
-          key: imagens-${{ hashFiles('data/cartas.json') }}
+          key: imagens-${{ github.run_id }}
           restore-keys: imagens-
 
       - name: Baixar imagens das cartas
         run: node scripts/baixar_imagens.mjs
+
+      - uses: actions/cache/save@v4
+        with:
+          path: img
+          key: imagens-${{ github.run_id }}
 
       - name: Montar o site
         run: |
@@ -46,8 +51,6 @@ jobs:
           find _site/img -name '*.idioma' -delete
 
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
 

@@ -10,7 +10,7 @@ import path from 'node:path'
 const RAIZ = new URL('..', import.meta.url).pathname
 const dados = JSON.parse(fs.readFileSync(path.join(RAIZ, 'data/cartas.json'), 'utf8'))
 const BASE = 'https://assets.tcgdex.net'
-const SIMULTANEOS = 16
+const SIMULTANEOS = 6
 
 // Cada tarefa: um arquivo de destino e os endereços para tentar, em ordem.
 const tarefas = []
@@ -29,16 +29,17 @@ for (const set of dados.sets) {
 	}
 }
 
+// Devolve o arquivo, ou null se não existe (404), ou undefined se o servidor falhou.
 async function baixar(url) {
-	for (let tentativa = 1; tentativa <= 3; tentativa++) {
+	for (let tentativa = 1; tentativa <= 5; tentativa++) {
 		try {
 			const resposta = await fetch(url)
 			if (resposta.status === 404) return null
 			if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`)
 			return Buffer.from(await resposta.arrayBuffer())
 		} catch (erro) {
-			if (tentativa === 3) { console.warn(`Falhou: ${url} (${erro.message})`); return null }
-			await new Promise(r => setTimeout(r, 1000 * tentativa))
+			if (tentativa === 5) { console.warn(`Falhou: ${url} (${erro.message})`); return undefined }
+			await new Promise(r => setTimeout(r, 2000 * tentativa))
 		}
 	}
 }
@@ -46,7 +47,7 @@ async function baixar(url) {
 // Resultado por set: quantas imagens em português, em inglês e faltando.
 const resumo = {}
 async function executar(tarefa) {
-	const r = resumo[tarefa.set] ||= { pt: 0, en: 0, falta: 0, faltando: [] }
+	const r = resumo[tarefa.set] ||= { pt: 0, en: 0, falta: 0, faltando: [], erro: 0 }
 	const destino = path.join(RAIZ, tarefa.destino)
 	const marcador = destino + '.idioma'
 	if (fs.existsSync(destino) && fs.existsSync(marcador)) {
@@ -55,7 +56,9 @@ async function executar(tarefa) {
 	}
 	for (const [i, url] of tarefa.urls.entries()) {
 		const conteudo = await baixar(url)
-		if (!conteudo) continue
+		// Servidor com problema: não usa a imagem inglesa no lugar; tenta de novo na próxima publicação.
+		if (conteudo === undefined) { if (tarefa.tipo === 'low') r.erro++; return }
+		if (conteudo === null) continue
 		const idioma = i === 0 ? 'pt' : 'en'
 		fs.mkdirSync(path.dirname(destino), { recursive: true })
 		fs.writeFileSync(destino, conteudo)
@@ -71,11 +74,11 @@ await Promise.all(Array.from({ length: SIMULTANEOS }, async () => {
 	while (proxima < tarefas.length) await executar(tarefas[proxima++])
 }))
 
-const linhas = ['| Set | Imagem em PT | Em inglês | Sem imagem |', '|---|---|---|---|']
+const linhas = ['| Set | Imagem em PT | Em inglês | Sem imagem | Erro (tenta de novo depois) |', '|---|---|---|---|---|']
 for (const set of dados.sets) {
 	const r = resumo[set.id]
 	const faltando = r.faltando.length ? ` (${r.faltando.slice(0, 15).join(', ')}${r.faltando.length > 15 ? '…' : ''})` : ''
-	linhas.push(`| ${set.nome} (${set.id}) | ${r.pt} | ${r.en} | ${r.falta}${faltando} |`)
+	linhas.push(`| ${set.nome} (${set.id}) | ${r.pt} | ${r.en} | ${r.falta}${faltando} | ${r.erro} |`)
 }
 const tabela = linhas.join('\n')
 console.log(tabela)
