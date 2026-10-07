@@ -2,7 +2,7 @@
 //
 // Ao mudar algum arquivo do app, aumente o número da VERSAO para os celulares
 // baixarem a versão nova.
-const VERSAO = 'v2'
+const VERSAO = 'v3'
 const CACHE_APP = `colecao-app-${VERSAO}`
 const CACHE_IMAGENS = 'colecao-imagens'
 
@@ -11,6 +11,7 @@ const ARQUIVOS_APP = [
 	'index.html',
 	'styles.css',
 	'app.js',
+	'nuvem.js',
 	'data/cartas.json',
 	'manifest.webmanifest',
 	'icons/icon.svg',
@@ -40,6 +41,8 @@ self.addEventListener('fetch', evento => {
 
 	if (url.hostname === 'assets.tcgdex.net' || (url.origin === self.location.origin && url.pathname.includes('/img/'))) {
 		evento.respondWith(imagem(request))
+	} else if (url.hostname === 'www.gstatic.com' && url.pathname.startsWith('/firebasejs/')) {
+		evento.respondWith(bibliotecaFirebase(request))
 	} else if (url.origin === self.location.origin) {
 		evento.respondWith(arquivoDoApp(request))
 	}
@@ -78,4 +81,14 @@ async function imagem(request) {
 			return Response.error()
 		}
 	}
+}
+
+// Biblioteca do Firebase (login): cada versão nunca muda, então guarda e reutiliza.
+async function bibliotecaFirebase(request) {
+	const cache = await caches.open(CACHE_IMAGENS)
+	const guardado = await cache.match(request.url)
+	if (guardado) return guardado
+	const resposta = await fetch(request)
+	if (resposta.ok) cache.put(request.url, resposta.clone())
+	return resposta
 }

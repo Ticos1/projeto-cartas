@@ -12,6 +12,8 @@ const IMAGENS = 'https://assets.tcgdex.net'
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
+let nuvem = null              // módulo nuvem.js (login e sincronização), quando disponível
+let usuario = null            // { email } de quem está logado
 const filtros = {}            // filtro escolhido em cada set: 'todas' | 'faltam' | 'tenho'
 const buscas = {}             // texto da busca em cada tela
 
@@ -59,6 +61,7 @@ function alternar(setId, numero) {
 	if (numeros.has(numero)) numeros.delete(numero)
 	else numeros.add(numero)
 	salvarColecao()
+	nuvem?.marcarNaNuvem(setId, numero, numeros.has(numero))
 	return numeros.has(numero)
 }
 
@@ -259,11 +262,16 @@ function telaInicio() {
 	const busca = buscas.inicio || ''
 
 	tela.innerHTML = `
+		<button class="convite" id="convite" ${usuario || !nuvem ? 'hidden' : ''}>
+			<span aria-hidden="true">☁️</span>
+			<span><b>Sincronize o celular e o PC.</b> Toque aqui para entrar ou criar sua conta.</span>
+		</button>
 		<section class="resumo" id="resumo"></section>
 		<input class="busca" id="busca" type="search" placeholder="Buscar carta em todos os sets (nome ou nº)" value="${escapar(busca)}" autocomplete="off" enterkeyhint="search">
 		<div id="conteudo"></div>`
 
 	atualizarResumo()
+	$('#convite').addEventListener('click', abrirMenu)
 
 	const campo = $('#busca')
 	campo.addEventListener('input', () => {
@@ -429,10 +437,12 @@ $('#voltar').addEventListener('click', () => {
 })
 
 /* ---------- Menu: backup e tema ---------- */
-$('#abrir-menu').addEventListener('click', () => {
+function abrirMenu() {
 	marcarTemaNoMenu()
 	$('#menu').hidden = false
-})
+}
+$('#abrir-menu').addEventListener('click', abrirMenu)
+$('#status-nuvem').addEventListener('click', abrirMenu)
 $('#fechar-menu').addEventListener('click', () => { $('#menu').hidden = true })
 $('#menu').addEventListener('click', evento => {
 	if (evento.target.id === 'menu') $('#menu').hidden = true
@@ -480,9 +490,11 @@ $('#arquivo-backup').addEventListener('change', async evento => {
 			quantidade += novas[set].size
 		}
 		const atuais = Object.values(colecao).reduce((soma, s) => soma + s.size, 0)
-		if (!confirm(`Substituir sua coleção atual (${atuais} cartas) pelo backup (${quantidade} cartas)?`)) return
+		const ondeSubstitui = usuario ? ' (no aparelho e na sua conta)' : ''
+		if (!confirm(`Substituir sua coleção atual${ondeSubstitui} (${atuais} cartas) pelo backup (${quantidade} cartas)?`)) return
 		colecao = novas
 		salvarColecao()
+		nuvem?.substituirNaNuvem(colecaoComoObjeto())
 		$('#menu').hidden = true
 		navegar()
 		avisar(`Backup importado: ${quantidade} cartas.`)
@@ -518,6 +530,106 @@ $('#tema').addEventListener('click', evento => {
 
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => aplicarTema(ler(CHAVE_TEMA) || 'auto'))
 
+/* ---------- Conta e sincronização ---------- */
+const TEXTO_STATUS = {
+	sincronizado: '✅ Tudo sincronizado.',
+	sincronizando: '🔄 Sincronizando…',
+	offline: '📴 Sem internet. As mudanças serão enviadas quando a conexão voltar.',
+	desconectado: '',
+}
+
+function mostrarStatus(status) {
+	$('#status-nuvem').dataset.status = status
+	$('#status-nuvem').title = TEXTO_STATUS[status] || 'Entrar na conta'
+	$('#conta-status').textContent = TEXTO_STATUS[status]
+}
+
+function mostrarUsuario(novo) {
+	const entrou = !usuario && novo
+	usuario = novo
+	$('#conta-carregando').hidden = true
+	$('#conta-desconectado').hidden = !!usuario
+	$('#conta-conectado').hidden = !usuario
+	$('#conta-email').textContent = usuario?.email || ''
+	if ($('#convite')) $('#convite').hidden = !!usuario
+	if (entrou && !$('#menu').hidden) {
+		$('#menu').hidden = true
+		avisar(`Conectado como ${usuario.email}`)
+	}
+}
+
+// Chegou a coleção da nuvem (de outro aparelho, ou a junção do primeiro login).
+function receberColecao(cartas) {
+	colecao = {}
+	for (const [set, numeros] of Object.entries(cartas)) colecao[set] = new Set(numeros)
+	salvarColecao()
+	// Atualiza a tela sem perder a rolagem nem o que foi digitado na busca.
+	for (const botao of document.querySelectorAll('.carta')) atualizarCarta(botao)
+	if (!$('#zoom').hidden && cartaAberta) atualizarBotaoZoom()
+	if (!rotaAtual().setId && !(buscas.inicio || '').trim()) desenharInicio()
+	atualizarProgressoNaTela()
+}
+
+async function carregarNuvem() {
+	try {
+		nuvem = await import('./nuvem.js')
+	} catch (erro) {
+		console.warn('Login indisponível:', erro)
+		$('#conta-carregando').hidden = true
+		$('#conta-indisponivel').hidden = false
+		return
+	}
+	nuvem.iniciarNuvem({
+		colecaoLocal: colecaoComoObjeto,
+		aoMudarUsuario: mostrarUsuario,
+		aoReceberColecao: receberColecao,
+		aoMudarStatus: mostrarStatus,
+	})
+	if (!usuario && $('#convite')) $('#convite').hidden = false
+}
+
+// Trava os botões enquanto espera a resposta do Firebase.
+async function acaoDeConta(acao) {
+	const botoes = document.querySelectorAll('#form-login button')
+	$('#login-erro').textContent = ''
+	botoes.forEach(b => { b.disabled = true })
+	try {
+		await acao()
+	} catch (erro) {
+		$('#login-erro').textContent = nuvem.mensagemDeErro(erro)
+	} finally {
+		botoes.forEach(b => { b.disabled = false })
+	}
+}
+
+const emailDigitado = () => $('#login-email').value.trim()
+
+$('#form-login').addEventListener('submit', evento => {
+	evento.preventDefault()
+	acaoDeConta(() => nuvem.entrar(emailDigitado(), $('#login-senha').value))
+})
+
+$('#botao-criar').addEventListener('click', () => {
+	if (!$('#form-login').reportValidity()) return
+	acaoDeConta(() => nuvem.criarConta(emailDigitado(), $('#login-senha').value))
+})
+
+$('#botao-esqueci').addEventListener('click', () => {
+	if (!emailDigitado()) {
+		$('#login-erro').textContent = 'Digite seu e-mail acima e toque de novo em "Esqueci minha senha".'
+		return
+	}
+	acaoDeConta(async () => {
+		await nuvem.recuperarSenha(emailDigitado())
+		avisar('Enviamos um e-mail para você criar uma nova senha.')
+	})
+})
+
+$('#botao-sair').addEventListener('click', async () => {
+	await nuvem.sair()
+	avisar('Você saiu da conta. A coleção continua salva neste aparelho.')
+})
+
 /* ---------- Início ---------- */
 async function iniciar() {
 	aplicarTema(ler(CHAVE_TEMA) || 'auto')
@@ -530,6 +642,7 @@ async function iniciar() {
 		return
 	}
 	navegar()
+	carregarNuvem()
 
 	if ('serviceWorker' in navigator) {
 		navigator.serviceWorker.register('sw.js').catch(() => { /* app funciona sem modo offline */ })
