@@ -10,7 +10,7 @@ const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v8'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v9'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -289,6 +289,7 @@ tela.addEventListener('click', evento => {
 
 /* ---------- Tela: carta ampliada ---------- */
 let cartaAberta = null
+let toqueComecouNoZoom = false   // o toque atual começou dentro da carta aberta?
 
 let animandoZoom = false
 const semAnimacao = () => matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -308,6 +309,7 @@ function abrirZoom(botao) {
 	const set = dados.sets.find(s => s.id === botao.dataset.set)
 	const carta = set.cartas.find(c => c.n === botao.dataset.n)
 	cartaAberta = botao
+	toqueComecouNoZoom = false
 
 	// Começa com a imagem que já está na grade e troca pela de alta qualidade quando chegar.
 	const imgGrade = botao.querySelector('.carta-img img')
@@ -367,8 +369,14 @@ function atualizarBotaoZoom() {
 	$('#zoom-marcar').classList.toggle('secundario', marcada)
 }
 
+$('#zoom').addEventListener('pointerdown', () => { toqueComecouNoZoom = true })
+
 $('#zoom-marcar').addEventListener('click', evento => {
 	evento.stopPropagation()
+	// Ignora o "soltar" do mesmo dedo que segurou a carta (o botão pode estar embaixo dele).
+	const novoToque = toqueComecouNoZoom || evento.detail === 0
+	toqueComecouNoZoom = false
+	if (!novoToque) return
 	alternar(cartaAberta.dataset.set, cartaAberta.dataset.n)
 	atualizarCarta(cartaAberta)
 	atualizarBotaoZoom()
@@ -377,8 +385,6 @@ $('#zoom-marcar').addEventListener('click', evento => {
 
 // Fecha ao tocar fora do botão, mas só num toque novo: o mesmo dedo que segurou a
 // carta, ao soltar, não deve fechar a carta que acabou de abrir.
-let toqueComecouNoZoom = false
-$('#zoom').addEventListener('pointerdown', () => { toqueComecouNoZoom = true })
 $('#zoom').addEventListener('click', evento => {
 	const novoToque = toqueComecouNoZoom
 	toqueComecouNoZoom = false
