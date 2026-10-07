@@ -10,7 +10,7 @@ const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v16'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v17'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -986,10 +986,83 @@ function mostrarAvisoDeVersao(versao) {
 	const aviso = document.createElement('button')
 	aviso.id = 'aviso-versao'
 	aviso.className = 'convite novidade'
-	aviso.innerHTML = `<span aria-hidden="true">📲</span><span><b>Nova versão do app (1.${versao}).</b> Toque para baixar e instalar.</span>`
-	aviso.addEventListener('click', () => baixarApk(versao))
+	aviso.innerHTML = `<span aria-hidden="true">📲</span><span id="aviso-versao-texto"><b>Nova versão do app (1.${versao}).</b> Toque para atualizar.</span>`
+	aviso.addEventListener('click', () => atualizarApp(versao))
 	document.body.insertBefore(aviso, tela)
 }
+
+/* Atualização feita pelo próprio app (peça nativa "Atualizador" do APK):
+   baixa com o gerenciador de downloads do Android e abre o instalador.
+   Em APKs antigos ou no navegador essa peça não existe e cai no link de download. */
+const atualizadorNativo = () => window.Capacitor?.isNativePlatform?.() ? window.Capacitor.Plugins?.Atualizador || null : null
+let atualizacao = null            // { versao, nome, fase: 'baixando' | 'baixado' } enquanto atualiza
+let aguardandoPermissao = false   // o usuário foi à tela do Android permitir instalar apps
+let ouvintesPostos = false
+
+function mostrarEstadoApk(texto) {
+	if ($('#apk-texto')) $('#apk-texto').textContent = texto
+	if ($('#aviso-versao-texto')) $('#aviso-versao-texto').textContent = texto
+}
+
+async function prepararOuvintes(atualizador) {
+	if (ouvintesPostos) return
+	ouvintesPostos = true
+	await atualizador.addListener('progresso', evento => {
+		if (atualizacao?.fase === 'baixando') mostrarEstadoApk(`Baixando a atualização… ${evento.percentual}%`)
+	})
+	await atualizador.addListener('baixado', () => {
+		if (!atualizacao) return
+		atualizacao.fase = 'baixado'
+		instalarBaixado()
+	})
+	await atualizador.addListener('erro', evento => {
+		atualizacao = null
+		mostrarEstadoApk(`${evento.mensagem || 'Não consegui baixar.'} Verifique a internet e toque para tentar de novo.`)
+	})
+}
+
+async function atualizarApp(versao) {
+	const atualizador = atualizadorNativo()
+	if (!atualizador) { baixarApk(versao); return }
+	if (atualizacao?.fase === 'baixando') return
+	if (atualizacao?.fase === 'baixado') { instalarBaixado(); return }   // tocou de novo: reabre o instalador
+	atualizacao = { versao, nome: `colecao-tcg-1.${versao}.apk`, fase: 'baixando' }
+	mostrarEstadoApk('Baixando a atualização…')
+	try {
+		await prepararOuvintes(atualizador)
+		await atualizador.baixar({ url: linkApk(versao), nome: atualizacao.nome })
+	} catch {
+		atualizacao = null
+		mostrarEstadoApk('Não consegui começar o download. Toque para tentar de novo.')
+	}
+}
+
+async function instalarBaixado() {
+	const atualizador = atualizadorNativo()
+	if (!atualizador || !atualizacao) return
+	try {
+		const { permitido } = await atualizador.podeInstalar()
+		if (!permitido) {
+			// O Android exige que o usuário permita, uma vez, que este app instale outros apps.
+			aguardandoPermissao = true
+			mostrarEstadoApk('Quase lá: ligue "Permitir desta fonte" para a Coleção TCG e volte para este app.')
+			await atualizador.pedirPermissao()
+			return
+		}
+		mostrarEstadoApk('Abrindo o instalador… toque em "Instalar".')
+		await atualizador.instalar({ nome: atualizacao.nome })
+	} catch {
+		mostrarEstadoApk('Não consegui abrir o instalador. Abra a notificação de download concluído.')
+	}
+}
+
+// Voltou da tela de permissão do Android: continua a instalação.
+document.addEventListener('visibilitychange', () => {
+	if (document.visibilityState === 'visible' && aguardandoPermissao) {
+		aguardandoPermissao = false
+		instalarBaixado()
+	}
+})
 
 // Seção "App Android" do menu: mostra a versão instalada e deixa procurar atualização.
 function configurarSecaoApk() {
@@ -1014,8 +1087,8 @@ function configurarSecaoApk() {
 			texto.textContent = `Versão instalada: 1.${instalada}. Não consegui consultar agora; verifique a internet.`
 		} else if (maisNova > instalada) {
 			texto.textContent = `Versão instalada: 1.${instalada}. Nova versão disponível: 1.${maisNova}.`
-			botao.textContent = `Baixar versão 1.${maisNova}`
-			botao.onclick = () => baixarApk(maisNova)
+			botao.textContent = atualizadorNativo() ? 'Atualizar agora' : `Baixar versão 1.${maisNova}`
+			botao.onclick = () => atualizarApp(maisNova)
 			mostrarAvisoDeVersao(maisNova)
 		} else {
 			texto.textContent = `Versão instalada: 1.${instalada}. Você já está na versão mais nova.`

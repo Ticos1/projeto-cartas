@@ -115,3 +115,14 @@ celulares pegarem a versão nova.
 - No site (`app.js`, seção "Botão voltar do celular"): a carta grande e o menu ganham uma
   entrada no histórico, então o voltar só os fecha; e um set sempre tem a lista logo abaixo,
   mesmo se o app foi aberto direto nele.
+
+## Atualização do app feita pelo próprio app
+
+- `AtualizadorPlugin.java` (peça nativa do APK): baixa o APK novo com o gerenciador de downloads
+  do Android (progresso na notificação) e abre o instalador. Só baixa de
+  `github.com/Ticos1/projeto-cartas/releases/`.
+- No site (`app.js`, "Atualização do app feita pelo próprio app"): o aviso verde e o botão
+  **Atualizar agora** (menu ⋮ → App Android) mostram o progresso e pedem ao Android, uma vez,
+  a permissão "Permitir desta fonte".
+- APKs antigos (sem a peça) e o navegador usam o link de download comum.
+- Cada versão é publicada com nome próprio (`colecao-tcg-1.N.apk`).

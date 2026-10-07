@@ -10,6 +10,8 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Plugin próprio: baixa e instala a atualização do app (precisa vir antes do super).
+        registerPlugin(AtualizadorPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Botão voltar do Android: volta para a tela anterior do app (histórico do site).
