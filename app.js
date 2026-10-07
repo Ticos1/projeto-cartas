@@ -10,7 +10,7 @@ const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v14'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v15'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -720,6 +720,7 @@ $('#voltar').addEventListener('click', () => {
 function abrirMenu() {
 	if (!$('#menu').hidden) return
 	marcarTemaNoMenu()
+	configurarSecaoApk()
 	$('#menu').hidden = false
 	registrarSobreposicao()
 }
@@ -944,25 +945,36 @@ $('#botao-sair').addEventListener('click', async () => {
 // O APK se identifica como "ColecaoTCG-Android/N". Se houver um APK mais novo
 // em Releases no GitHub, mostra um aviso para baixar.
 const LINK_APK = 'https://github.com/Ticos1/projeto-cartas/releases/latest/download/colecao-tcg.apk'
-const CHAVE_VERSAO = 'colecao-tcg-ultima-versao-apk'
+const CHAVE_VERSAO = 'colecao-tcg-apk-mais-novo'
+const VALIDADE_CONSULTA = 15 * 60 * 1000   // consulta o GitHub no máximo a cada 15 minutos
 
-async function verificarVersaoDoApp() {
-	const instalada = Number(navigator.userAgent.match(/ColecaoTCG-Android\/(\d+)/)?.[1])
-	if (!instalada) return
+const versaoInstaladaDoApk = () => Number(navigator.userAgent.match(/ColecaoTCG-Android\/(\d+)/)?.[1]) || 0
 
-	// Consulta o GitHub no máximo a cada 6 horas.
+// Pergunta ao GitHub qual é o APK mais novo. Devolve o número (ex.: 3) ou 0 se não deu.
+async function versaoMaisNovaDoApk(ignorarGuardado = false) {
 	let info = null
 	try { info = JSON.parse(ler(CHAVE_VERSAO) || 'null') } catch { /* sem cache */ }
-	if (!info || Date.now() - info.quando > 6 * 3600 * 1000) {
-		try {
-			const resposta = await fetch('https://api.github.com/repos/Ticos1/projeto-cartas/releases/latest')
-			const release = await resposta.json()
-			info = { quando: Date.now(), versao: Number(String(release.tag_name).split('.')[1]) || 0 }
-			gravar(CHAVE_VERSAO, JSON.stringify(info))
-		} catch { return }
+	if (!ignorarGuardado && info && Date.now() - info.quando < VALIDADE_CONSULTA) return info.versao
+	try {
+		const resposta = await fetch('https://api.github.com/repos/Ticos1/projeto-cartas/releases/latest', { cache: 'no-store' })
+		if (!resposta.ok) return 0
+		const release = await resposta.json()
+		const versao = Number(String(release.tag_name).split('.')[1]) || 0
+		if (versao) gravar(CHAVE_VERSAO, JSON.stringify({ quando: Date.now(), versao }))
+		return versao
+	} catch {
+		return 0
 	}
-	if (info.versao > instalada) mostrarAvisoDeVersao(info.versao)
 }
+
+async function verificarVersaoDoApp() {
+	const instalada = versaoInstaladaDoApk()
+	if (!instalada) return
+	const maisNova = await versaoMaisNovaDoApk()
+	if (maisNova > instalada) mostrarAvisoDeVersao(maisNova)
+}
+
+function baixarApk() { location.href = LINK_APK }
 
 function mostrarAvisoDeVersao(versao) {
 	if ($('#aviso-versao')) return
@@ -970,8 +982,40 @@ function mostrarAvisoDeVersao(versao) {
 	aviso.id = 'aviso-versao'
 	aviso.className = 'convite novidade'
 	aviso.innerHTML = `<span aria-hidden="true">📲</span><span><b>Nova versão do app (1.${versao}).</b> Toque para baixar e instalar.</span>`
-	aviso.addEventListener('click', () => { location.href = LINK_APK })
+	aviso.addEventListener('click', baixarApk)
 	document.body.insertBefore(aviso, tela)
+}
+
+// Seção "App Android" do menu: mostra a versão instalada e deixa procurar atualização.
+function configurarSecaoApk() {
+	const texto = $('#apk-texto'), botao = $('#apk-botao')
+	if (!texto || !botao) return
+	const instalada = versaoInstaladaDoApk()
+	botao.hidden = false
+	if (!instalada) {
+		texto.textContent = 'Você está usando pelo navegador. Para ter o app instalado no Android, baixe o APK.'
+		botao.textContent = 'Baixar app Android'
+		botao.onclick = baixarApk
+		return
+	}
+	texto.textContent = `Versão instalada: 1.${instalada}`
+	botao.textContent = 'Procurar atualização'
+	botao.onclick = async () => {
+		botao.disabled = true
+		texto.textContent = 'Procurando…'
+		const maisNova = await versaoMaisNovaDoApk(true)
+		botao.disabled = false
+		if (!maisNova) {
+			texto.textContent = `Versão instalada: 1.${instalada}. Não consegui consultar agora; verifique a internet.`
+		} else if (maisNova > instalada) {
+			texto.textContent = `Versão instalada: 1.${instalada}. Nova versão disponível: 1.${maisNova}.`
+			botao.textContent = `Baixar versão 1.${maisNova}`
+			botao.onclick = baixarApk
+			mostrarAvisoDeVersao(maisNova)
+		} else {
+			texto.textContent = `Versão instalada: 1.${instalada}. Você já está na versão mais nova.`
+		}
+	}
 }
 
 /* ---------- Início ---------- */
@@ -1000,7 +1044,7 @@ async function iniciar() {
 		navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(registro => {
 			registro.update().catch(() => {})
 			document.addEventListener('visibilitychange', () => {
-				if (document.visibilityState === 'visible') registro.update().catch(() => {})
+				if (document.visibilityState === 'visible') { registro.update().catch(() => {}); verificarVersaoDoApp() }
 			})
 		}).catch(() => { /* app funciona sem modo offline */ })
 	}
