@@ -2,7 +2,7 @@
 //
 // Ao mudar algum arquivo do app, aumente o número da VERSAO para os celulares
 // baixarem a versão nova.
-const VERSAO = 'v1'
+const VERSAO = 'v2'
 const CACHE_APP = `colecao-app-${VERSAO}`
 const CACHE_IMAGENS = 'colecao-imagens'
 
@@ -38,7 +38,7 @@ self.addEventListener('fetch', evento => {
 	if (request.method !== 'GET') return
 	const url = new URL(request.url)
 
-	if (url.hostname === 'assets.tcgdex.net') {
+	if (url.hostname === 'assets.tcgdex.net' || (url.origin === self.location.origin && url.pathname.includes('/img/'))) {
 		evento.respondWith(imagem(request))
 	} else if (url.origin === self.location.origin) {
 		evento.respondWith(arquivoDoApp(request))
@@ -64,9 +64,10 @@ async function imagem(request) {
 	const guardado = await cache.match(request.url)
 	if (guardado) return guardado
 	try {
-		const resposta = await fetch(request.url, { mode: 'cors' })
+		const mesmoSite = new URL(request.url).origin === self.location.origin
+		const resposta = await fetch(request.url, mesmoSite ? {} : { mode: 'cors' })
 		if (resposta.ok) cache.put(request.url, resposta.clone())
-		return resposta // se der 404, o app tenta a imagem em inglês
+		return resposta // se der 404, o app tenta o próximo endereço
 	} catch {
 		// Sem internet, ou o servidor não permite CORS: busca do jeito normal.
 		try {

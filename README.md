@@ -30,11 +30,19 @@ e Promos MEP.
 | `manifest.webmanifest` | Nome e ícone para instalar na tela inicial |
 | `sw.js` | Service worker: faz o app funcionar offline |
 | `icons/` | Ícones do app |
+| `scripts/baixar_imagens.mjs` | Baixa as imagens das cartas (roda no GitHub Actions) |
+| `.github/workflows/pages.yml` | Publica o app no GitHub Pages |
 | `scripts/gerar_dados.mjs` | Gera o `data/cartas.json` (para atualizar ou adicionar sets) |
 | `docs/etapa1-validacao.md` | Análise dos dados em português (Etapa 1) |
 
-As imagens das cartas vêm de `assets.tcgdex.net`: primeiro em português e, se não houver,
-em inglês.
+## Imagens e publicação (GitHub Pages)
+
+A cada push, o GitHub Actions (`.github/workflows/pages.yml`) baixa as imagens das cartas do
+TCGdex (`scripts/baixar_imagens.mjs`, em português e, se não houver, em inglês) para a pasta
+`img/` e publica o site no GitHub Pages. O resumo de quantas imagens vieram em PT/inglês
+aparece na página da execução, na aba **Actions**.
+
+Se uma imagem não estiver na pasta `img/`, o app tenta buscar direto no TCGdex.
 
 ## Testar no computador
 

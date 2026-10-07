@@ -8,7 +8,6 @@
 
 const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
-const CHAVE_SEM_PT = 'colecao-tcg-sem-imagem-pt'
 const IMAGENS = 'https://assets.tcgdex.net'
 
 let dados = null              // conteúdo de data/cartas.json
@@ -69,37 +68,33 @@ function progresso(set) {
 	return { tem, total: set.cartas.length, pct: Math.floor((tem / set.cartas.length) * 100) }
 }
 
-/* ---------- Imagens (português, com reserva em inglês) ---------- */
-// Lembra quais cartas não têm imagem em português, para ir direto na inglesa da próxima vez.
-const semPt = new Set()
-try { JSON.parse(ler(CHAVE_SEM_PT) || '[]').forEach(chave => semPt.add(chave)) } catch { /* lista vazia */ }
-
-function urlImagem(setId, numero, idioma, qualidade = 'low') {
-	return `${IMAGENS}/${idioma}/${dados.serie}/${setId}/${numero}/${qualidade}.webp`
+/* ---------- Imagens ---------- */
+// Ordem: cópia publicada junto com o app (pasta img/) → TCGdex em português → TCGdex em inglês.
+function fontesImagem(setId, arquivo) {
+	return [
+		`img/${setId}/${arquivo}`,
+		`${IMAGENS}/pt/${dados.serie}/${setId}/${arquivo}`,
+		`${IMAGENS}/en/${dados.serie}/${setId}/${arquivo}`,
+	]
 }
 
-function urlLogo(setId, idioma) {
-	return `${IMAGENS}/${idioma}/${dados.serie}/${setId}/logo.webp`
-}
-
-// Coloca a imagem na <img>: tenta português; se não existir, inglês; se não, mostra só o texto.
-function carregarImagem(img, setId, numero, qualidade) {
-	const chave = `${setId}/${numero}`
-	const idiomas = semPt.has(chave) ? ['en'] : ['pt', 'en']
+// Tenta cada endereço até um funcionar; se nenhum funcionar, chama semImagem().
+function carregarEmOrdem(img, fontes, semImagem) {
 	let i = 0
 	img.onerror = () => {
-		if (idiomas[i] === 'pt') {
-			semPt.add(chave)
-			gravar(CHAVE_SEM_PT, JSON.stringify([...semPt]))
-		}
 		i++
-		if (i < idiomas.length) img.src = urlImagem(setId, numero, idiomas[i], qualidade)
-		else img.hidden = true
+		if (i < fontes.length) img.src = fontes[i]
+		else semImagem()
 	}
+	img.hidden = false
+	img.src = fontes[0]
+}
+
+// Imagem da carta; enquanto carrega (ou se não existir), aparece o nome da carta.
+function carregarImagem(img, setId, numero, qualidade) {
 	img.onload = () => img.parentElement.classList.add('com-imagem')
 	img.parentElement.classList.remove('com-imagem')
-	img.hidden = false
-	img.src = urlImagem(setId, numero, idiomas[0], qualidade)
+	carregarEmOrdem(img, fontesImagem(setId, `${numero}/${qualidade}.webp`), () => { img.hidden = true })
 }
 
 /* ---------- Ajudantes ---------- */
@@ -321,14 +316,12 @@ function desenharInicio() {
 			</a></li>`
 	}).join('')}</ul>`
 
-	// Logo do set: português, senão inglês, senão a sigla em texto.
+	// Logo do set; se não houver, fica a sigla em texto.
 	for (const img of conteudo.querySelectorAll('img[data-logo]')) {
-		const id = img.dataset.logo
-		img.onerror = () => {
-			if (img.src.includes('/pt/')) img.src = urlLogo(id, 'en')
-			else { img.hidden = true; img.nextElementSibling.hidden = false }
-		}
-		img.src = urlLogo(id, 'pt')
+		carregarEmOrdem(img, fontesImagem(img.dataset.logo, 'logo.webp'), () => {
+			img.hidden = true
+			img.nextElementSibling.hidden = false
+		})
 	}
 }
 
