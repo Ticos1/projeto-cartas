@@ -107,3 +107,11 @@ celulares pegarem a versão nova.
   nelas o botão abre a **busca da Liga pelo nome** da carta.
 - A Liga protege as páginas internas contra robôs, então os links não são testados
   automaticamente: confira algumas cartas depois de mudar essa parte.
+
+## Botão voltar do celular
+
+- No app Android, `MainActivity.java` faz o botão voltar andar no histórico do site
+  (tela anterior). Só fecha o app quando não há mais para onde voltar (na lista de sets).
+- No site (`app.js`, seção "Botão voltar do celular"): a carta grande e o menu ganham uma
+  entrada no histórico, então o voltar só os fecha; e um set sempre tem a lista logo abaixo,
+  mesmo se o app foi aberto direto nele.

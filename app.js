@@ -10,7 +10,7 @@ const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v13'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v14'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -354,6 +354,7 @@ function abrirZoom(botao) {
 	$('#zoom-info').textContent = [set.nome, numeroExibido(set, carta), carta.raridade].filter(Boolean).join(' · ')
 	atualizarBotaoZoom()
 	$('#zoom').hidden = false
+	registrarSobreposicao()
 
 	if (semAnimacao()) return
 	const origem = transformacaoDaGrade(botao) || 'scale(.3)'
@@ -373,7 +374,7 @@ function abrirZoom(botao) {
 }
 
 // Fecha: a carta volta girando para o lugar dela na grade.
-async function fecharZoom(animar = true, forcar = false) {
+async function fecharZoom(animar = true, forcar = false, veioDoHistorico = false) {
 	if ($('#zoom').hidden || (animandoZoom && !forcar)) return
 	if (forcar) animandoZoom = false
 	const destino = animar && !semAnimacao() && document.body.contains(cartaAberta) ? transformacaoDaGrade(cartaAberta) : null
@@ -391,6 +392,7 @@ async function fecharZoom(animar = true, forcar = false) {
 	}
 	$('#zoom').hidden = true
 	for (const el of [$('#zoom'), $('#zoom-giro'), $('#zoom-detalhes')]) el.getAnimations().forEach(a => a.cancel())
+	if (!veioDoHistorico) liberarSobreposicao()
 }
 
 /* ---------- Liga Pokémon ---------- */
@@ -653,6 +655,9 @@ function rotaAtual() {
 
 function navegar() {
 	$('#zoom').hidden = true
+	entradasDeSobreposicao = 0
+	// Toda tela que o app abre fica marcada como "do app" no histórico.
+	if (!history.state?.app) history.replaceState({ app: true }, '')
 	const { setId } = rotaAtual()
 	if (setId) telaSet(setId)
 	else telaInicio()
@@ -661,25 +666,73 @@ function navegar() {
 
 window.addEventListener('hashchange', navegar)
 
-// Se o app foi aberto direto num set, "voltar" leva para o início em vez de sair do app.
-let navegouDentroDoApp = false
-window.addEventListener('hashchange', () => { navegouDentroDoApp = true })
+/* ---------- Botão voltar do celular ---------- */
+// O voltar do Android (e do navegador) anda no histórico. Para ele voltar para a tela
+// anterior em vez de sair do app: (1) cada sobreposição aberta (carta grande, menu) ganha
+// uma entrada no histórico, então o voltar só a fecha; (2) um set sempre tem a lista logo
+// abaixo dele, mesmo se o app foi aberto direto no set.
+let entradasDeSobreposicao = 0   // quantas entradas extras o app empurrou no histórico
+let ignorarPopstate = 0          // voltas que o próprio app pediu (não são o botão do celular)
+
+function registrarSobreposicao() {
+	history.pushState({ app: true, sobreposicao: true }, '')
+	entradasDeSobreposicao++
+}
+
+// A sobreposição foi fechada pela própria tela (toque fora, botão Fechar): tira a entrada.
+function liberarSobreposicao() {
+	if (entradasDeSobreposicao === 0) return
+	entradasDeSobreposicao--
+	ignorarPopstate++
+	history.back()
+}
+
+window.addEventListener('popstate', () => {
+	if (ignorarPopstate) { ignorarPopstate--; return }
+	if (entradasDeSobreposicao === 0) return
+	// O voltar do celular já desfez a entrada: só falta esconder o que está aberto.
+	entradasDeSobreposicao--
+	if (!$('#zoom').hidden) fecharZoom(true, true, true)
+	else if (!$('#menu').hidden) fecharMenu(true)
+})
+
+function prepararHistorico() {
+	if (history.state?.sobreposicao) history.replaceState({ app: true }, '')
+	if (history.state?.app) return   // recarregou dentro do app: o histórico já é nosso
+	const { setId } = rotaAtual()
+	if (setId) {
+		const destino = location.hash
+		history.replaceState({ app: true }, '', '#/')
+		history.pushState({ app: true }, '', destino)
+	} else {
+		history.replaceState({ app: true }, '')
+	}
+}
 
 $('#voltar').addEventListener('click', () => {
-	if (navegouDentroDoApp) history.back()
-	else location.hash = '#/'
+	const antes = location.hash
+	history.back()
+	// Se não havia para onde voltar, vai para a lista direto.
+	setTimeout(() => { if (location.hash === antes && rotaAtual().setId) location.hash = '#/' }, 400)
 })
 
 /* ---------- Menu: backup e tema ---------- */
 function abrirMenu() {
+	if (!$('#menu').hidden) return
 	marcarTemaNoMenu()
 	$('#menu').hidden = false
+	registrarSobreposicao()
+}
+function fecharMenu(veioDoHistorico = false) {
+	if ($('#menu').hidden) return
+	$('#menu').hidden = true
+	if (!veioDoHistorico) liberarSobreposicao()
 }
 $('#abrir-menu').addEventListener('click', abrirMenu)
 $('#status-nuvem').addEventListener('click', abrirMenu)
-$('#fechar-menu').addEventListener('click', () => { $('#menu').hidden = true })
+$('#fechar-menu').addEventListener('click', () => fecharMenu())
 $('#menu').addEventListener('click', evento => {
-	if (evento.target.id === 'menu') $('#menu').hidden = true
+	if (evento.target.id === 'menu') fecharMenu()
 })
 
 $('#exportar').addEventListener('click', async () => {
@@ -744,7 +797,7 @@ $('#arquivo-backup').addEventListener('change', async evento => {
 		colecao = novas
 		salvarColecao()
 		nuvem?.substituirNaNuvem(colecaoComoObjeto())
-		$('#menu').hidden = true
+		fecharMenu()
 		navegar()
 		avisar(`Backup importado: ${quantidade} cartas.`)
 	} catch {
@@ -802,7 +855,7 @@ function mostrarUsuario(novo) {
 	$('#conta-email').textContent = usuario?.email || ''
 	if ($('#convite')) $('#convite').hidden = !!usuario
 	if (entrou && !$('#menu').hidden) {
-		$('#menu').hidden = true
+		fecharMenu()
 		avisar(`Conectado como ${usuario.email}`)
 	}
 }
@@ -935,6 +988,7 @@ async function iniciar() {
 		tela.innerHTML = '<p class="vazio">Não foi possível carregar a lista de cartas. Verifique a internet e tente de novo.</p>'
 		return
 	}
+	prepararHistorico()
 	navegar()
 	window.__appPronto = true
 	carregarNuvem()
