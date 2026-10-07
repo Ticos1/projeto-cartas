@@ -2,7 +2,7 @@
 //
 // Ao mudar algum arquivo do app, aumente o número da VERSAO para os celulares
 // baixarem a versão nova.
-const VERSAO = 'v12'
+const VERSAO = 'v13'
 const CACHE_APP = `colecao-app-${VERSAO}`
 const CACHE_IMAGENS = 'colecao-imagens'
 
@@ -20,18 +20,34 @@ const ARQUIVOS_APP = [
 ]
 
 self.addEventListener('install', evento => {
-	evento.waitUntil(caches.open(CACHE_APP).then(cache => cache.addAll(ARQUIVOS_APP)))
+	evento.waitUntil(precarregar())
 	self.skipWaiting()
 })
 
+// Baixa TODOS os arquivos do app de uma vez, direto da rede (sem usar cópias velhas do
+// navegador), e guarda no cache desta versão. Assim index.html, app.js e os outros
+// arquivos são sempre do mesmo lote: nunca se misturam versões diferentes.
+async function precarregar() {
+	const cache = await caches.open(CACHE_APP)
+	await Promise.all(ARQUIVOS_APP.map(async caminho => {
+		const resposta = await fetch(new Request(caminho, { cache: 'reload' }))
+		if (!resposta.ok) throw new Error(`${caminho}: HTTP ${resposta.status}`)
+		await cache.put(caminho, resposta)
+	}))
+}
+
 self.addEventListener('activate', evento => {
-	evento.waitUntil(
-		caches.keys()
-			.then(nomes => Promise.all(nomes
-				.filter(nome => nome.startsWith('colecao-app-') && nome !== CACHE_APP)
-				.map(nome => caches.delete(nome))))
-			.then(() => self.clients.claim())
-	)
+	evento.waitUntil((async () => {
+		const nomes = await caches.keys()
+		const antigos = nomes.filter(nome => nome.startsWith('colecao-app-') && nome !== CACHE_APP)
+		await Promise.all(antigos.map(nome => caches.delete(nome)))
+		await self.clients.claim()
+		// Era uma atualização: recarrega as telas abertas para já usarem a versão nova.
+		if (antigos.length) {
+			const telas = await self.clients.matchAll({ type: 'window' })
+			telas.forEach(tela => tela.navigate(tela.url).catch(() => {}))
+		}
+	})())
 })
 
 self.addEventListener('fetch', evento => {
@@ -48,23 +64,16 @@ self.addEventListener('fetch', evento => {
 	}
 })
 
-// Arquivos do app: com internet, sempre a versão mais nova (e guarda uma cópia);
-// sem internet (ou se a rede demorar mais de 4 segundos), usa a cópia guardada.
+// Arquivos do app: sempre do lote guardado desta versão (rápido, funciona sem internet e
+// nunca mistura versões). A versão nova chega pelo service worker novo, que recarrega a tela.
 async function arquivoDoApp(request) {
 	const cache = await caches.open(CACHE_APP)
-	const daRede = fetch(request, { cache: 'no-cache' }).then(resposta => {
-		if (resposta.ok) cache.put(request, resposta.clone())
-		return resposta
-	})
-	const guardado = () => cache.match(request, { ignoreSearch: true })
-		.then(copia => copia || cache.match('index.html'))
-	const limite = new Promise(resolver => setTimeout(resolver, 4000))
+	const guardado = await cache.match(request.mode === 'navigate' ? 'index.html' : request, { ignoreSearch: true })
+	if (guardado) return guardado
 	try {
-		const resposta = await Promise.race([daRede, limite.then(guardado)])
-		if (resposta) return resposta
-		return await daRede
+		return await fetch(request)
 	} catch {
-		return (await guardado()) || Response.error()
+		return Response.error()
 	}
 }
 

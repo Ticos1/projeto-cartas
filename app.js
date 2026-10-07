@@ -10,7 +10,7 @@ const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v12'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v13'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -421,12 +421,14 @@ function atualizarBotaoZoom() {
 	const set = dados.sets.find(s => s.id === cartaAberta.dataset.set)
 	const carta = set.cartas.find(c => c.n === cartaAberta.dataset.n)
 	const liga = linkLiga(set, carta)
-	$('#zoom-liga').hidden = marcada
-	$('#zoom-comprar').href = liga.url
-	$('#zoom-comprar-texto').textContent = liga.exato ? 'Comprar na Liga Pokémon' : 'Buscar na Liga Pokémon'
-	$('#zoom-buscar').href = liga.busca
-	$('#zoom-buscar').hidden = !liga.exato
-	$('#zoom-status').hidden = !marcada
+	if ($('#zoom-liga')) {
+		$('#zoom-liga').hidden = marcada
+		$('#zoom-comprar').href = liga.url
+		$('#zoom-comprar-texto').textContent = liga.exato ? 'Comprar na Liga Pokémon' : 'Buscar na Liga Pokémon'
+		$('#zoom-buscar').href = liga.busca
+		$('#zoom-buscar').hidden = !liga.exato
+	}
+	if ($('#zoom-status')) $('#zoom-status').hidden = !marcada
 	$('#zoom-marcar').textContent = marcada ? 'Desmarcar' : 'Marcar como "tenho"'
 	$('#zoom-marcar').classList.toggle('secundario', marcada)
 }
@@ -434,7 +436,7 @@ function atualizarBotaoZoom() {
 $('#zoom').addEventListener('pointerdown', () => { toqueComecouNoZoom = true })
 
 // Os links da Liga também ignoram o "soltar" do dedo que segurou a carta.
-for (const link of [$('#zoom-comprar'), $('#zoom-buscar')]) {
+for (const link of [$('#zoom-comprar'), $('#zoom-buscar')].filter(Boolean)) {
 	link.addEventListener('click', evento => {
 		evento.stopPropagation()
 		const novoToque = toqueComecouNoZoom || evento.detail === 0
@@ -921,31 +923,28 @@ function mostrarAvisoDeVersao(versao) {
 
 /* ---------- Início ---------- */
 async function iniciar() {
-	$('#versao-app').textContent = VERSAO_APP
+	const rotuloVersao = $('#versao-app')
+	if (rotuloVersao) rotuloVersao.textContent = VERSAO_APP
 	aplicarTema(ler(CHAVE_TEMA) || 'auto')
 	carregarColecao()
 	try {
 		const resposta = await fetch('data/cartas.json')
 		dados = await resposta.json()
 	} catch {
+		window.__appPronto = true
 		tela.innerHTML = '<p class="vazio">Não foi possível carregar a lista de cartas. Verifique a internet e tente de novo.</p>'
 		return
 	}
 	navegar()
+	window.__appPronto = true
 	carregarNuvem()
 	verificarVersaoDoApp()
 
 	if ('serviceWorker' in navigator) {
-		// Atualização automática: quando sai uma versão nova do app, o service worker novo
-		// assume e a página recarrega sozinha. Ao voltar para o app, confere se há novidade.
-		const tinhaVersaoAnterior = !!navigator.serviceWorker.controller
-		let recarregou = false
-		navigator.serviceWorker.addEventListener('controllerchange', () => {
-			if (!tinhaVersaoAnterior || recarregou) return
-			recarregou = true
-			location.reload()
-		})
+		// Quando sai uma versão nova, o service worker novo assume e recarrega a tela sozinho.
+		// Ao voltar para o app (ou abrir), confere se há novidade.
 		navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(registro => {
+			registro.update().catch(() => {})
 			document.addEventListener('visibilitychange', () => {
 				if (document.visibilityState === 'visible') registro.update().catch(() => {})
 			})
