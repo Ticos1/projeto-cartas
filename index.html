@@ -80,10 +80,25 @@
 	<!-- Carta ampliada (toque longo) -->
 	<div class="fundo-escuro" id="zoom" hidden>
 		<div class="zoom-caixa" role="dialog" aria-label="Carta ampliada">
-			<img id="zoom-img" alt="">
-			<p id="zoom-nome"></p>
-			<p id="zoom-info" class="dica"></p>
-			<button class="botao" id="zoom-marcar"></button>
+			<div class="carta-3d">
+				<div class="carta-giro" id="zoom-giro">
+					<div class="face face-frente">
+						<span class="sem-imagem" id="zoom-sem-imagem"></span>
+						<img id="zoom-img" alt="">
+					</div>
+					<div class="face face-verso" aria-hidden="true">
+						<div class="verso-moldura">
+							<img src="icons/icon.svg" alt="">
+							<span>Coleção TCG</span>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div id="zoom-detalhes">
+				<p id="zoom-nome"></p>
+				<p id="zoom-info" class="dica"></p>
+				<button class="botao" id="zoom-marcar"></button>
+			</div>
 		</div>
 	</div>
 

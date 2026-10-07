@@ -260,16 +260,75 @@ tela.addEventListener('click', evento => {
 /* ---------- Tela: carta ampliada ---------- */
 let cartaAberta = null
 
+let animandoZoom = false
+const semAnimacao = () => matchMedia('(prefers-reduced-motion: reduce)').matches
+
+// Posição da carta da grade em relação à carta grande: usada para a carta "sair" da grade.
+function transformacaoDaGrade(botao) {
+	const grande = $('#zoom-giro').getBoundingClientRect()
+	const pequena = botao?.querySelector('.carta-img')?.getBoundingClientRect()
+	if (!pequena || !pequena.width) return null
+	const dx = pequena.left + pequena.width / 2 - (grande.left + grande.width / 2)
+	const dy = pequena.top + pequena.height / 2 - (grande.top + grande.height / 2)
+	return `translate(${dx}px, ${dy}px) scale(${pequena.width / grande.width})`
+}
+
+// Toque longo: a carta sai da grade girando (mostra o verso) e para de frente, grande.
 function abrirZoom(botao) {
 	const set = dados.sets.find(s => s.id === botao.dataset.set)
 	const carta = set.cartas.find(c => c.n === botao.dataset.n)
 	cartaAberta = botao
-	carregarImagem($('#zoom-img'), set.id, carta.n, 'high')
-	$('#zoom-img').alt = carta.nome
+
+	// Começa com a imagem que já está na grade e troca pela de alta qualidade quando chegar.
+	const imgGrade = botao.querySelector('.carta-img img')
+	const img = $('#zoom-img')
+	const temImagem = imgGrade && !imgGrade.hidden && imgGrade.complete && imgGrade.naturalWidth
+	img.hidden = !temImagem
+	if (temImagem) img.src = imgGrade.currentSrc || imgGrade.src
+	img.alt = carta.nome
+	$('#zoom-sem-imagem').textContent = carta.nome
+	const alta = new Image()
+	alta.onload = () => { if (cartaAberta === botao) { img.src = alta.src; img.hidden = false } }
+	carregarEmOrdem(alta, fontesImagem(set.id, `${carta.n}/high.webp`), () => {})
+
 	$('#zoom-nome').textContent = carta.nome
 	$('#zoom-info').textContent = [set.nome, numeroExibido(set, carta), carta.raridade].filter(Boolean).join(' · ')
 	atualizarBotaoZoom()
 	$('#zoom').hidden = false
+
+	if (semAnimacao()) return
+	const origem = transformacaoDaGrade(botao) || 'scale(.3)'
+	animandoZoom = true
+	$('#zoom').animate([{ backgroundColor: 'rgba(0,0,0,0)' }, { backgroundColor: 'rgba(0,0,0,.8)' }], { duration: 350 })
+	$('#zoom-giro').animate([
+		{ transform: `${origem} rotateY(0deg)` },
+		{ transform: 'translate(0, 0) scale(1) rotateY(720deg)' },
+	], { duration: 950, easing: 'cubic-bezier(.2, .7, .25, 1)' }).finished.finally(() => { animandoZoom = false })
+	$('#zoom-detalhes').animate([
+		{ opacity: 0, transform: 'translateY(12px)' },
+		{ opacity: 0, transform: 'translateY(12px)', offset: .6 },
+		{ opacity: 1, transform: 'none' },
+	], { duration: 1100 })
+}
+
+// Fecha: a carta volta girando para o lugar dela na grade.
+async function fecharZoom(animar = true) {
+	if ($('#zoom').hidden || animandoZoom) return
+	const destino = animar && !semAnimacao() && document.body.contains(cartaAberta) ? transformacaoDaGrade(cartaAberta) : null
+	if (destino) {
+		animandoZoom = true
+		const opcoes = { duration: 450, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' }
+		$('#zoom-detalhes').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 150, fill: 'forwards' })
+		$('#zoom').animate([{ backgroundColor: 'rgba(0,0,0,.8)' }, { backgroundColor: 'rgba(0,0,0,0)' }], opcoes)
+		const giro = $('#zoom-giro').animate([
+			{ transform: 'translate(0, 0) scale(1) rotateY(0deg)' },
+			{ transform: `${destino} rotateY(-360deg)` },
+		], opcoes)
+		await giro.finished.catch(() => {})
+		animandoZoom = false
+	}
+	$('#zoom').hidden = true
+	for (const el of [$('#zoom'), $('#zoom-giro'), $('#zoom-detalhes')]) el.getAnimations().forEach(a => a.cancel())
 }
 
 function atualizarBotaoZoom() {
@@ -287,7 +346,7 @@ $('#zoom-marcar').addEventListener('click', evento => {
 })
 
 $('#zoom').addEventListener('click', evento => {
-	if (evento.target.id !== 'zoom-marcar') $('#zoom').hidden = true
+	if (evento.target.id !== 'zoom-marcar') fecharZoom()
 })
 
 /* ---------- Tela: início (lista de sets) ---------- */
