@@ -8,13 +8,14 @@
 
 const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_DESEJOS = 'colecao-tcg-desejos'
+const CHAVE_LIGA_ABERTAS = 'colecao-tcg-liga-abertas'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v28'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v29'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -464,7 +465,7 @@ async function fecharZoom(animar = true, forcar = false, veioDoHistorico = false
 	$('#zoom').hidden = true
 	for (const el of [$('#zoom'), $('#zoom-giro'), $('#zoom-detalhes')]) el.getAnimations().forEach(a => a.cancel())
 	if (!veioDoHistorico) liberarSobreposicao()
-	if (rotaAtual().aba === 'desejos') { const y = window.scrollY; desenharDesejos(); window.scrollTo(0, y) }
+	if (rotaAtual().aba === 'desejos' && !rotaAtual().sub) { const y = window.scrollY; desenharDesejos(); window.scrollTo(0, y) }
 }
 
 /* ---------- Efeitos de raridade ---------- */
@@ -972,6 +973,91 @@ function abrirEscolhaRaridade(estado = pesquisa, aoMudar = desenharPesquisa, soD
 }
 
 /* ---------- Aba: Lista de Desejos ---------- */
+const ICONE_CARRINHO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2.2l2.1 10.2a1.5 1.5 0 0 0 1.5 1.2h8.1a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.1"/><circle cx="9.5" cy="19.5" r="1.4"/><circle cx="16.5" cy="19.5" r="1.4"/></svg>'
+const ICONE_EXTERNO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>'
+
+// Cartas da lista que já foram abertas na Liga (para saber qual é a próxima).
+let abertasNaLiga = new Set()
+try { abertasNaLiga = new Set(JSON.parse(ler(CHAVE_LIGA_ABERTAS) || '[]')) } catch { /* nenhuma */ }
+const chaveLiga = (set, carta) => `${set.id}|${carta.n}`
+
+// Cartas para comprar: as da lista de desejos que ainda não tenho, com os filtros da lista.
+function cartasParaComprar() {
+	const itens = []
+	for (const set of dados.sets) {
+		if (filtroDesejos.set && set.id !== filtroDesejos.set) continue
+		for (const carta of set.cartas) {
+			if (!desejada(set.id, carta.n) || tenho(set.id, carta.n)) continue
+			if (filtroDesejos.raridade && carta.raridade !== filtroDesejos.raridade) continue
+			itens.push({ set, carta })
+		}
+	}
+	return itens
+}
+
+function telaComprarNaLiga() {
+	definirTopo('Comprar na Liga', '', true)
+	tela.innerHTML = `
+		<div class="dica-liga">
+			<p><b>Como funciona</b></p>
+			<ol>
+				<li>Toque em <b>Abrir próxima</b>: a página dela abre na Liga Pokémon.</li>
+				<li>Lá, filtre a qualidade <b>NM</b> e escolha uma loja do <b>seu estado</b>.</li>
+				<li>Adicione ao carrinho e volte para cá para abrir a próxima.</li>
+			</ol>
+		</div>
+		<div id="conteudo"></div>`
+	desenharComprarNaLiga()
+}
+
+function desenharComprarNaLiga() {
+	const conteudo = $('#conteudo')
+	if (!conteudo) return
+	const itens = cartasParaComprar()
+	const filtrado = filtroDesejos.set || filtroDesejos.raridade
+	if (!itens.length) {
+		$('#subtitulo').textContent = ''
+		conteudo.innerHTML = `<p class="vazio">Nenhuma carta para comprar${filtrado ? ' com os filtros da lista' : ''}. Cartas que você já tem não entram aqui.</p>`
+		return
+	}
+	const abertas = itens.filter(i => abertasNaLiga.has(chaveLiga(i.set, i.carta))).length
+	const proxima = itens.find(i => !abertasNaLiga.has(chaveLiga(i.set, i.carta)))
+	$('#subtitulo').textContent = `${itens.length} carta${itens.length > 1 ? 's' : ''}${filtrado ? ' (com filtros)' : ''}`
+	conteudo.innerHTML = `
+		<div class="progresso-liga">
+			<div class="barra"><span style="width:${Math.round(abertas / itens.length * 100)}%"></span></div>
+			<p>${abertas} de ${itens.length} aberta${itens.length > 1 ? 's' : ''} na Liga</p>
+		</div>
+		${proxima
+			? `<a class="botao comprar-liga" id="liga-proxima" href="${escapar(linkLiga(proxima.set, proxima.carta).url)}" target="_blank" rel="noopener noreferrer" data-chave="${escapar(chaveLiga(proxima.set, proxima.carta))}">${ICONE_EXTERNO}<span>Abrir próxima: ${escapar(proxima.carta.nome)}</span></a>`
+			: '<p class="liga-concluido">✓ Você abriu todas as cartas. Confira o carrinho na Liga!</p>'}
+		<ul class="lista-liga">${itens.map(({ set, carta }) => {
+			const chave = chaveLiga(set, carta)
+			const aberta = abertasNaLiga.has(chave)
+			return `<li class="item-liga${aberta ? ' aberta' : ''}">
+				<span class="item-liga-img" data-set="${escapar(set.id)}" data-n="${escapar(carta.n)}"><img alt="" loading="lazy"></span>
+				<span class="item-liga-texto"><b>${escapar(carta.nome)}</b><small>${escapar([set.nome, numeroExibido(set, carta), carta.raridade].filter(Boolean).join(' · '))}</small>${aberta ? '<small class="item-liga-ok">✓ Aberta na Liga</small>' : ''}</span>
+				<a class="botao secundario item-liga-abrir" href="${escapar(linkLiga(set, carta).url)}" target="_blank" rel="noopener noreferrer" data-chave="${escapar(chave)}">${aberta ? 'Abrir de novo' : 'Abrir'}</a>
+			</li>`
+		}).join('')}</ul>
+		${abertas ? '<button class="botao secundario" id="liga-recomecar">Recomeçar (desmarcar as abertas)</button>' : ''}`
+
+	for (const caixa of conteudo.querySelectorAll('.item-liga-img')) carregarImagem(caixa.querySelector('img'), caixa.dataset.set, caixa.dataset.n, 'low')
+	// Ao abrir uma carta na Liga, marca como aberta (o link abre normalmente em outra janela).
+	for (const link of conteudo.querySelectorAll('a[data-chave]')) {
+		link.addEventListener('click', () => {
+			abertasNaLiga.add(link.dataset.chave)
+			gravar(CHAVE_LIGA_ABERTAS, JSON.stringify([...abertasNaLiga]))
+			setTimeout(desenharComprarNaLiga, 300)
+		})
+	}
+	$('#liga-recomecar')?.addEventListener('click', () => {
+		for (const { set, carta } of itens) abertasNaLiga.delete(chaveLiga(set, carta))
+		gravar(CHAVE_LIGA_ABERTAS, JSON.stringify([...abertasNaLiga]))
+		desenharComprarNaLiga()
+	})
+}
+
 const filtroDesejos = { set: '', raridade: '', limite: PASSO_PESQUISA }
 
 function telaDesejos() {
@@ -1014,7 +1100,10 @@ function desenharDesejos() {
 		return
 	}
 	if (!itens.length) { conteudo.innerHTML = '<p class="vazio">Nenhuma carta da lista com esses filtros.</p>'; return }
-	conteudo.innerHTML = `<h2 class="titulo-secao">${itens.length} carta${itens.length > 1 ? 's' : ''}</h2>`
+	const faltam = itens.filter(({ set, carta }) => !tenho(set.id, carta.n)).length
+	conteudo.innerHTML = `
+		${faltam ? `<a class="botao comprar-liga" href="#/desejos/comprar">${ICONE_CARRINHO}<span>Comprar na Liga Pokémon (${faltam})</span></a>` : ''}
+		<h2 class="titulo-secao">${itens.length} carta${itens.length > 1 ? 's' : ''}</h2>`
 	conteudo.appendChild(montarGrade(itens.slice(0, filtroDesejos.limite), true))
 	if (itens.length > filtroDesejos.limite) {
 		const mais = document.createElement('button')
@@ -1375,7 +1464,7 @@ function rotaAtual() {
 	const partes = location.hash.replace(/^#\/?/, '').split('/')
 	if (partes[0] === 'set') return { aba: 'colecoes', setId: decodeURIComponent(partes[1] || '') }
 	if (partes[0] === 'colecoes') return { aba: 'colecoes' }
-	if (partes[0] === 'desejos') return { aba: 'desejos' }
+	if (partes[0] === 'desejos') return { aba: 'desejos', sub: partes[1] === 'comprar' ? 'comprar' : '' }
 	if (partes[0] === 'configuracoes') return { aba: 'configuracoes', sub: partes[1] === 'logs' ? 'logs' : 'temas' }
 	return { aba: 'pesquisa' }
 }
@@ -1392,7 +1481,7 @@ function navegar() {
 	const { setId, aba, sub } = rotaAtual()
 	if (setId) telaSet(setId)
 	else if (aba === 'colecoes') telaColecoes()
-	else if (aba === 'desejos') telaDesejos()
+	else if (aba === 'desejos') sub === 'comprar' ? telaComprarNaLiga() : telaDesejos()
 	else if (aba === 'configuracoes') telaConfiguracoes(sub)
 	else telaPesquisa()
 	marcarAbaNaGaveta(aba)
@@ -1436,10 +1525,11 @@ window.addEventListener('popstate', () => {
 function prepararHistorico() {
 	if (history.state?.sobreposicao) history.replaceState({ app: true }, '')
 	if (history.state?.app) return   // recarregou dentro do app: o histórico já é nosso
-	const { setId } = rotaAtual()
-	if (setId) {
+	const { setId, aba, sub } = rotaAtual()
+	const abaixo = setId ? '#/colecoes' : aba === 'desejos' && sub === 'comprar' ? '#/desejos' : null
+	if (abaixo) {
 		const destino = location.hash
-		history.replaceState({ app: true }, '', '#/colecoes')
+		history.replaceState({ app: true }, '', abaixo)
 		history.pushState({ app: true }, '', destino)
 	} else {
 		history.replaceState({ app: true }, '')
@@ -1450,7 +1540,12 @@ $('#voltar').addEventListener('click', () => {
 	const antes = location.hash
 	history.back()
 	// Se não havia para onde voltar, vai para a lista de coleções direto.
-	setTimeout(() => { if (location.hash === antes && rotaAtual().setId) location.hash = '#/colecoes' }, 400)
+	setTimeout(() => {
+		if (location.hash !== antes) return
+		const { setId, sub } = rotaAtual()
+		if (setId) location.hash = '#/colecoes'
+		else if (sub === 'comprar') location.hash = '#/desejos'
+	}, 400)
 })
 
 /* ---------- Abas (botão de três riscos) ---------- */
@@ -1739,8 +1834,8 @@ function receberColecao(cartas, semMaster = [], desejosNuvem = {}) {
 	// Atualiza a tela sem perder a rolagem nem o que foi digitado na busca.
 	for (const botao of document.querySelectorAll('.carta')) atualizarCarta(botao)
 	if (!$('#zoom').hidden && cartaAberta) atualizarBotaoZoom()
-	const { aba, setId } = rotaAtual()
-	if (!setId) { if (aba === 'colecoes') desenharColecoes(); else if (aba === 'desejos') desenharDesejos(); else if (aba === 'pesquisa') desenharPesquisa() }
+	const { aba, setId, sub } = rotaAtual()
+	if (!setId) { if (aba === 'colecoes') desenharColecoes(); else if (aba === 'desejos') sub === 'comprar' ? desenharComprarNaLiga() : desenharDesejos(); else if (aba === 'pesquisa') desenharPesquisa() }
 	atualizarProgressoNaTela()
 }
 
