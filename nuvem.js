@@ -88,8 +88,9 @@ export function iniciarNuvem(opcoes) {
 			try {
 				const atual = await dbSdk.getDoc(documento)
 				const unido = juntar(atual.data()?.cartas, opcoes.colecaoLocal())
+					const desejosUnidos = juntar(atual.data()?.desejos, opcoes.desejosLocal?.())
 				const semMaster = [...new Set([...(atual.data()?.semMasterSet || []), ...(opcoes.semMasterSetLocal?.() || [])])]
-				await dbSdk.setDoc(documento, { cartas: unido, semMasterSet: semMaster, atualizadoEm: dbSdk.serverTimestamp() }, { merge: true })
+				await dbSdk.setDoc(documento, { cartas: unido, desejos: desejosUnidos, semMasterSet: semMaster, atualizadoEm: dbSdk.serverTimestamp() }, { merge: true })
 				try { localStorage.setItem(chaveJuntou, '1') } catch { /* sem localStorage */ }
 			} catch (erro) {
 				console.warn('Não foi possível juntar com a nuvem agora:', erro)
@@ -97,7 +98,7 @@ export function iniciarNuvem(opcoes) {
 		}
 
 		pararDeOuvir = dbSdk.onSnapshot(documento, { includeMetadataChanges: true }, foto => {
-			if (foto.exists()) avisos.aoReceberColecao(foto.data().cartas || {}, foto.data().semMasterSet || [])
+			if (foto.exists()) avisos.aoReceberColecao(foto.data().cartas || {}, foto.data().semMasterSet || [], foto.data().desejos || {})
 			const pendente = foto.metadata.hasPendingWrites
 			avisos.aoMudarStatus(pendente ? 'sincronizando' : foto.metadata.fromCache ? 'offline' : 'sincronizado')
 		}, erro => {
@@ -127,9 +128,11 @@ export function marcarNaNuvem(setId, numero, tem) {
 }
 
 // Usado ao importar um backup: troca a coleção inteira.
-export function substituirNaNuvem(cartas) {
+export function substituirNaNuvem(cartas, desejos) {
 	if (!documento) return
-	dbSdk.setDoc(documento, { cartas, atualizadoEm: dbSdk.serverTimestamp() }, { mergeFields: ['cartas', 'atualizadoEm'] })
+	const dados = { cartas, atualizadoEm: dbSdk.serverTimestamp() }
+	if (desejos) dados.desejos = desejos
+	dbSdk.setDoc(documento, dados, { mergeFields: Object.keys(dados) })
 		.catch(erro => console.warn('Falha ao salvar na nuvem:', erro))
 }
 
@@ -139,5 +142,13 @@ export function masterSetNaNuvem(setId, ativo) {
 	if (!documento) return
 	const operacao = ativo ? dbSdk.arrayRemove(setId) : dbSdk.arrayUnion(setId)
 	dbSdk.setDoc(documento, { semMasterSet: operacao }, { merge: true })
+		.catch(erro => console.warn('Falha ao salvar na nuvem:', erro))
+}
+
+// Lista de desejos: igual às cartas marcadas, só altera aquela carta.
+export function marcarDesejoNaNuvem(setId, numero, quer) {
+	if (!documento) return
+	const operacao = quer ? dbSdk.arrayUnion(numero) : dbSdk.arrayRemove(numero)
+	dbSdk.setDoc(documento, { desejos: { [setId]: operacao }, atualizadoEm: dbSdk.serverTimestamp() }, { merge: true })
 		.catch(erro => console.warn('Falha ao salvar na nuvem:', erro))
 }

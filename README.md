@@ -157,3 +157,8 @@ Quem desligou as animações no celular vê só um clarão rápido, sem moviment
 Aba **Configurações** (☰ ou ⋮ → "Temas, modo claro/escuro e logs").
 - **Temas**: Modo Automático/Claro/Escuro, um tema para cada coleção (Megaevolução, Fogo Fantasmagórico, Heróis Excelsos, Equilíbrio Perfeito, Caos Ascendente, Escuridão Absoluta, Celebração de 30 Anos, Clássica de 30 Anos, Promos MEP) mais o Padrão e uma **cor personalizada**. A escolha fica salva no aparelho.
 - **Logs**: registro de erros, avisos e eventos do app (início, login, sincronização, atualizações). Dá para filtrar, copiar, compartilhar como arquivo e limpar. Ficam só no aparelho (máximo de 300).
+
+## Lista de Desejos
+- Segure uma carta; quando ela termina de girar, aparece uma **estrela** no canto superior direito. Tocar na estrela põe (ou tira) a carta da **Lista de Desejos**.
+- A aba **Lista de Desejos** (☰) mostra essas cartas, com filtro de coleção e de raridade. Cartas da lista ganham uma estrelinha amarela na grade.
+- A lista fica salva no aparelho e sincroniza pela conta (campo `desejos` do documento no Firestore) e entra no backup.

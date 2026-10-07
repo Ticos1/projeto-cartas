@@ -7,13 +7,14 @@
    ========================================================= */
 
 const CHAVE_COLECAO = 'colecao-tcg'
+const CHAVE_DESEJOS = 'colecao-tcg-desejos'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v26'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v27'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -84,6 +85,30 @@ function colecaoComoObjeto() {
 function salvarColecao() {
 	const ok = gravar(CHAVE_COLECAO, JSON.stringify({ versao: 1, cartas: colecaoComoObjeto() }))
 	if (!ok) avisar('Não foi possível salvar. O navegador está em modo privado?')
+}
+
+/* ---------- Lista de desejos ---------- */
+let desejos = {}   // { idDoSet: Set(['001', ...]) }
+function carregarDesejos() {
+	desejos = {}
+	try {
+		for (const [set, numeros] of Object.entries(JSON.parse(ler(CHAVE_DESEJOS) || '{}'))) desejos[set] = new Set(numeros)
+	} catch { /* lista vazia */ }
+}
+function desejosComoObjeto() {
+	const lista = {}
+	for (const [set, numeros] of Object.entries(desejos)) if (numeros.size) lista[set] = [...numeros]
+	return lista
+}
+function salvarDesejos() { gravar(CHAVE_DESEJOS, JSON.stringify(desejosComoObjeto())) }
+const desejada = (setId, numero) => desejos[setId]?.has(numero) || false
+function alternarDesejo(setId, numero) {
+	const numeros = desejos[setId] || (desejos[setId] = new Set())
+	if (numeros.has(numero)) numeros.delete(numero)
+	else numeros.add(numero)
+	salvarDesejos()
+	nuvem?.marcarDesejoNaNuvem(setId, numero, numeros.has(numero))
+	return numeros.has(numero)
 }
 
 function tenho(setId, numero) {
@@ -221,7 +246,7 @@ const ICONE_CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.
 
 function criarCarta(set, carta, mostrarSet) {
 	const botao = document.createElement('button')
-	botao.className = 'carta' + (tenho(set.id, carta.n) ? ' tenho' : '')
+	botao.className = 'carta' + (tenho(set.id, carta.n) ? ' tenho' : '') + (desejada(set.id, carta.n) ? ' desejada' : '')
 	botao.dataset.set = set.id
 	botao.dataset.n = carta.n
 	botao.setAttribute('aria-pressed', tenho(set.id, carta.n))
@@ -230,6 +255,7 @@ function criarCarta(set, carta, mostrarSet) {
 			<span class="sem-imagem">${escapar(carta.nome)}</span>
 			<img alt="${escapar(carta.nome)}" loading="lazy" decoding="async">
 			<span class="selo">${ICONE_CHECK}</span>
+			<span class="selo-desejo" aria-hidden="true">★</span>
 		</div>
 		<span class="carta-legenda"><b>${escapar(carta.nome)}</b>${escapar(mostrarSet ? `${set.nome} · ${carta.n}` : numeroExibido(set, carta))}</span>`
 	carregarImagem(botao.querySelector('img'), set.id, carta.n, 'low')
@@ -239,6 +265,7 @@ function criarCarta(set, carta, mostrarSet) {
 function atualizarCarta(botao) {
 	const marcada = tenho(botao.dataset.set, botao.dataset.n)
 	botao.classList.toggle('tenho', marcada)
+	botao.classList.toggle('desejada', desejada(botao.dataset.set, botao.dataset.n))
 	botao.setAttribute('aria-pressed', marcada)
 }
 
@@ -384,6 +411,7 @@ function abrirZoom(botao) {
 	alta.onload = () => { if (cartaAberta === botao) { img.src = alta.src; img.hidden = false } }
 	carregarEmOrdem(alta, fontesImagem(set.id, `${carta.n}/high.webp`), () => {})
 
+	$('#zoom-estrela').classList.remove('visivel')
 	$('#zoom-nome').textContent = carta.nome
 	$('#zoom-info').textContent = [set.nome, numeroExibido(set, carta), carta.raridade].filter(Boolean).join(' · ')
 	atualizarBotaoZoom()
@@ -391,7 +419,7 @@ function abrirZoom(botao) {
 	registrarSobreposicao()
 
 	pararEfeitos()
-	if (semAnimacao()) { iniciarEfeitos(carta.raridade, true); return }
+	if (semAnimacao()) { iniciarEfeitos(carta.raridade, true); mostrarEstrela(); return }
 	const idAbertura = ++aberturaDoZoom
 	const origem = transformacaoDaGrade(botao) || 'scale(.3)'
 	animandoZoom = true
@@ -404,7 +432,7 @@ function abrirZoom(botao) {
 		.finally(() => { animandoZoom = false })
 		.then(() => {
 			// A carta parou de frente: solta os efeitos da raridade (se ainda estiver aberta).
-			if (idAbertura === aberturaDoZoom && !$('#zoom').hidden) iniciarEfeitos(carta.raridade)
+			if (idAbertura === aberturaDoZoom && !$('#zoom').hidden) { iniciarEfeitos(carta.raridade); mostrarEstrela() }
 		})
 	$('#zoom-detalhes').animate([
 		{ opacity: 0, transform: 'translateY(12px)' },
@@ -419,6 +447,7 @@ async function fecharZoom(animar = true, forcar = false, veioDoHistorico = false
 	if (forcar) animandoZoom = false
 	aberturaDoZoom++
 	pararEfeitos()
+	$('#zoom-estrela').classList.remove('visivel')
 	const destino = animar && !semAnimacao() && document.body.contains(cartaAberta) ? transformacaoDaGrade(cartaAberta) : null
 	if (destino) {
 		animandoZoom = true
@@ -435,6 +464,7 @@ async function fecharZoom(animar = true, forcar = false, veioDoHistorico = false
 	$('#zoom').hidden = true
 	for (const el of [$('#zoom'), $('#zoom-giro'), $('#zoom-detalhes')]) el.getAnimations().forEach(a => a.cancel())
 	if (!veioDoHistorico) liberarSobreposicao()
+	if (rotaAtual().aba === 'desejos') { const y = window.scrollY; desenharDesejos(); window.scrollTo(0, y) }
 }
 
 /* ---------- Efeitos de raridade ---------- */
@@ -620,7 +650,15 @@ function linkLiga(set, carta) {
 	return { url: `${LIGA}?view=cards/card&card=${codificarLiga(`${carta.nome}(${carta.n}/${total})`)}`, busca, exato: true }
 }
 
+// A estrela da lista de desejos aparece quando a carta termina de girar e para de frente.
+function mostrarEstrela() {
+	if (!$('#zoom').hidden) $('#zoom-estrela').classList.add('visivel')
+}
+
 function atualizarBotaoZoom() {
+	const quer = desejada(cartaAberta.dataset.set, cartaAberta.dataset.n)
+	$('#zoom-estrela').setAttribute('aria-pressed', quer)
+	$('#zoom-estrela').setAttribute('aria-label', quer ? 'Tirar da lista de desejos' : 'Adicionar à lista de desejos')
 	const marcada = tenho(cartaAberta.dataset.set, cartaAberta.dataset.n)
 	// Só quem ainda não tem a carta vê o botão de comprar.
 	const set = dados.sets.find(s => s.id === cartaAberta.dataset.set)
@@ -649,6 +687,17 @@ for (const link of [$('#zoom-comprar'), $('#zoom-buscar')].filter(Boolean)) {
 		if (!novoToque) evento.preventDefault()
 	})
 }
+
+$('#zoom-estrela').addEventListener('click', evento => {
+	evento.stopPropagation()
+	const novoToque = toqueComecouNoZoom || evento.detail === 0
+	toqueComecouNoZoom = false
+	if (!novoToque) return
+	const quer = alternarDesejo(cartaAberta.dataset.set, cartaAberta.dataset.n)
+	atualizarCarta(cartaAberta)
+	atualizarBotaoZoom()
+	avisar(quer ? 'Adicionada à lista de desejos ★' : 'Tirada da lista de desejos')
+})
 
 $('#zoom-marcar').addEventListener('click', evento => {
 	evento.stopPropagation()
@@ -803,10 +852,10 @@ function carregarLogosDentro(elemento) {
 }
 
 // O botão do filtro mostra a coleção escolhida (logo + nome).
-function atualizarSeletorSet() {
+function atualizarSeletorSet(estado = pesquisa) {
 	const botao = $('#filtro-set')
 	if (!botao) return
-	const set = dados.sets.find(s => s.id === pesquisa.set)
+	const set = dados.sets.find(s => s.id === estado.set)
 	botao.innerHTML = `${htmlIconeSet(set)}<span class="seletor-texto">${escapar(set ? set.nome : 'Todos os sets')}</span>${SETA_SELETOR}`
 	carregarLogosDentro(botao)
 }
@@ -852,10 +901,10 @@ function htmlIconeRaridade(raridade) {
 	const nomes = raridade ? SIMBOLOS_RARIDADE[raridade] || ['circulo'] : ['circulo', 'losango', 'estrela-preta']   // vazio = todas
 	return `<span class="icone-simbolos">${nomes.map(n => `<svg class="simbolo" viewBox="0 0 24 24" aria-hidden="true">${FORMAS_SIMBOLO[n]}</svg>`).join('')}</span>`
 }
-function atualizarSeletorRaridade() {
+function atualizarSeletorRaridade(estado = pesquisa) {
 	const botao = $('#filtro-raridade')
 	if (!botao) return
-	botao.innerHTML = `${htmlIconeRaridade(pesquisa.raridade)}<span class="seletor-texto">${escapar(pesquisa.raridade || 'Todas as raridades')}</span>${SETA_SELETOR}`
+	botao.innerHTML = `${htmlIconeRaridade(estado.raridade)}<span class="seletor-texto">${escapar(estado.raridade || 'Todas as raridades')}</span>${SETA_SELETOR}`
 }
 
 /* Lista de escolha com ícones, que abre de baixo (o voltar do celular fecha só ela). */
@@ -890,33 +939,95 @@ $('#escolha').addEventListener('click', evento => {
 	escolheu?.(botao.dataset.valor)
 })
 
-function abrirEscolhaSet() {
+// estado: { set, raridade, limite } da tela que usa o filtro; aoMudar redesenha essa tela.
+// soDesejadas: nas contagens, só conta as cartas da lista de desejos.
+function abrirEscolhaSet(estado = pesquisa, aoMudar = desenharPesquisa, soDesejadas = false) {
+	const contar = set => cartasDoSet(set).filter(c => !soDesejadas || desejada(set.id, c.n)).length
 	const opcoes = [{ valor: '', icone: htmlIconeSet(null), rotulo: 'Todos os sets', detalhe: `${dados.sets.length} coleções` },
-		...dados.sets.map(set => ({ valor: set.id, icone: htmlIconeSet(set), rotulo: set.nome, detalhe: `${cartasDoSet(set).length} cartas` }))]
-	abrirEscolha('Coleção', opcoes, pesquisa.set, valor => {
-		pesquisa.set = valor
-		pesquisa.limite = PASSO_PESQUISA
-		atualizarSeletorSet()
-		desenharPesquisa()
+		...dados.sets.map(set => ({ valor: set.id, icone: htmlIconeSet(set), rotulo: set.nome, detalhe: `${contar(set)} cartas` }))]
+	abrirEscolha('Coleção', opcoes, estado.set, valor => {
+		estado.set = valor
+		estado.limite = PASSO_PESQUISA
+		atualizarSeletorSet(estado)
+		aoMudar()
 	})
 }
 
-function abrirEscolhaRaridade() {
+function abrirEscolhaRaridade(estado = pesquisa, aoMudar = desenharPesquisa, soDesejadas = false) {
 	// Quantas cartas de cada raridade existem (na coleção escolhida, se houver uma).
 	const contagem = {}
 	for (const set of dados.sets) {
-		if (pesquisa.set && set.id !== pesquisa.set) continue
-		for (const carta of cartasDoSet(set)) if (carta.raridade) contagem[carta.raridade] = (contagem[carta.raridade] || 0) + 1
+		if (estado.set && set.id !== estado.set) continue
+		for (const carta of cartasDoSet(set)) if (carta.raridade && (!soDesejadas || desejada(set.id, carta.n))) contagem[carta.raridade] = (contagem[carta.raridade] || 0) + 1
 	}
 	const total = Object.values(contagem).reduce((soma, n) => soma + n, 0)
 	const opcoes = [{ valor: '', icone: htmlIconeRaridade(''), rotulo: 'Todas as raridades', detalhe: `${total} cartas` },
 		...raridadesDasCartas().map(r => ({ valor: r, icone: htmlIconeRaridade(r), rotulo: r, detalhe: `${contagem[r] || 0} carta${contagem[r] === 1 ? '' : 's'}`, apagada: !contagem[r] }))]
-	abrirEscolha('Raridade', opcoes, pesquisa.raridade, valor => {
-		pesquisa.raridade = valor
-		pesquisa.limite = PASSO_PESQUISA
-		atualizarSeletorRaridade()
-		desenharPesquisa()
+	abrirEscolha('Raridade', opcoes, estado.raridade, valor => {
+		estado.raridade = valor
+		estado.limite = PASSO_PESQUISA
+		atualizarSeletorRaridade(estado)
+		aoMudar()
 	})
+}
+
+/* ---------- Aba: Lista de Desejos ---------- */
+const filtroDesejos = { set: '', raridade: '', limite: PASSO_PESQUISA }
+
+function telaDesejos() {
+	definirTopo('Lista de Desejos', '', false)
+	tela.innerHTML = `
+		<div class="filtros">
+			<button class="seletor" id="filtro-set" aria-haspopup="dialog" aria-label="Filtrar por coleção"></button>
+			<button class="seletor" id="filtro-raridade" aria-haspopup="dialog" aria-label="Filtrar por raridade"></button>
+		</div>
+		<div id="conteudo"></div>`
+	atualizarSeletorSet(filtroDesejos)
+	atualizarSeletorRaridade(filtroDesejos)
+	$('#filtro-set').addEventListener('click', () => abrirEscolhaSet(filtroDesejos, desenharDesejos, true))
+	$('#filtro-raridade').addEventListener('click', () => abrirEscolhaRaridade(filtroDesejos, desenharDesejos, true))
+	desenharDesejos()
+}
+
+function desenharDesejos() {
+	const conteudo = $('#conteudo')
+	if (!conteudo) return
+	const itens = []
+	let total = 0
+	for (const set of dados.sets) {
+		for (const carta of set.cartas) {
+			if (!desejada(set.id, carta.n)) continue
+			total++
+			if (filtroDesejos.set && set.id !== filtroDesejos.set) continue
+			if (filtroDesejos.raridade && carta.raridade !== filtroDesejos.raridade) continue
+			itens.push({ set, carta })
+		}
+	}
+	$('#subtitulo').textContent = total ? `${total} carta${total > 1 ? 's' : ''}` : ''
+	if (!total) {
+		conteudo.innerHTML = `
+			<div class="vazio dica-pesquisa">
+				<div class="icone-grande" aria-hidden="true">★</div>
+				<p><b>Sua lista está vazia</b></p>
+				<p>Segure uma carta para ampliá-la e, quando ela parar de girar, toque na estrela no canto de cima.</p>
+			</div>`
+		return
+	}
+	if (!itens.length) { conteudo.innerHTML = '<p class="vazio">Nenhuma carta da lista com esses filtros.</p>'; return }
+	conteudo.innerHTML = `<h2 class="titulo-secao">${itens.length} carta${itens.length > 1 ? 's' : ''}</h2>`
+	conteudo.appendChild(montarGrade(itens.slice(0, filtroDesejos.limite), true))
+	if (itens.length > filtroDesejos.limite) {
+		const mais = document.createElement('button')
+		mais.className = 'botao secundario'
+		mais.textContent = `Mostrar mais (${itens.length - filtroDesejos.limite} restantes)`
+		mais.addEventListener('click', () => {
+			const y = window.scrollY
+			filtroDesejos.limite += PASSO_PESQUISA
+			desenharDesejos()
+			window.scrollTo(0, y)
+		})
+		conteudo.appendChild(mais)
+	}
 }
 
 function desenharPesquisa() {
@@ -1264,6 +1375,7 @@ function rotaAtual() {
 	const partes = location.hash.replace(/^#\/?/, '').split('/')
 	if (partes[0] === 'set') return { aba: 'colecoes', setId: decodeURIComponent(partes[1] || '') }
 	if (partes[0] === 'colecoes') return { aba: 'colecoes' }
+	if (partes[0] === 'desejos') return { aba: 'desejos' }
 	if (partes[0] === 'configuracoes') return { aba: 'configuracoes', sub: partes[1] === 'logs' ? 'logs' : 'temas' }
 	return { aba: 'pesquisa' }
 }
@@ -1280,6 +1392,7 @@ function navegar() {
 	const { setId, aba, sub } = rotaAtual()
 	if (setId) telaSet(setId)
 	else if (aba === 'colecoes') telaColecoes()
+	else if (aba === 'desejos') telaDesejos()
 	else if (aba === 'configuracoes') telaConfiguracoes(sub)
 	else telaPesquisa()
 	marcarAbaNaGaveta(aba)
@@ -1445,7 +1558,7 @@ async function entregarArquivo(nome, texto, tipo, titulo) {
 $('#exportar').addEventListener('click', async () => {
 	const cartas = colecaoComoObjeto()
 	const quantidade = Object.values(cartas).reduce((soma, lista) => soma + lista.length, 0)
-	const backup = { app: 'minha-colecao-tcg', versao: 1, exportadoEm: new Date().toISOString(), cartas }
+	const backup = { app: 'minha-colecao-tcg', versao: 1, exportadoEm: new Date().toISOString(), cartas, desejos: desejosComoObjeto() }
 	const nome = `colecao-tcg-${new Date().toISOString().slice(0, 10)}.json`
 	const resultado = await entregarArquivo(nome, JSON.stringify(backup, null, 1), 'application/json', 'Backup da coleção')
 	if (resultado === 'compartilhado') avisar(`Backup com ${quantidade} cartas exportado.`)
@@ -1475,7 +1588,12 @@ $('#arquivo-backup').addEventListener('change', async evento => {
 		if (!confirm(`Substituir sua coleção atual${ondeSubstitui} (${atuais} cartas) pelo backup (${quantidade} cartas)?`)) return
 		colecao = novas
 		salvarColecao()
-		nuvem?.substituirNaNuvem(colecaoComoObjeto())
+		if (backup.desejos && typeof backup.desejos === 'object') {
+			desejos = {}
+			for (const [set, numeros] of Object.entries(backup.desejos)) if (Array.isArray(numeros)) desejos[set] = new Set(numeros.map(String))
+			salvarDesejos()
+		}
+		nuvem?.substituirNaNuvem(colecaoComoObjeto(), desejosComoObjeto())
 		fecharMenu()
 		navegar()
 		avisar(`Backup importado: ${quantidade} cartas.`)
@@ -1604,7 +1722,10 @@ function mostrarUsuario(novo) {
 }
 
 // Chegou a coleção da nuvem (de outro aparelho, ou a junção do primeiro login).
-function receberColecao(cartas, semMaster = []) {
+function receberColecao(cartas, semMaster = [], desejosNuvem = {}) {
+	desejos = {}
+	for (const [set, numeros] of Object.entries(desejosNuvem)) desejos[set] = new Set(numeros)
+	salvarDesejos()
 	const mudouMaster = semMaster.length !== semMasterSet.size || semMaster.some(id => !semMasterSet.has(id))
 	if (mudouMaster) {
 		semMasterSet = new Set(semMaster)
@@ -1619,7 +1740,7 @@ function receberColecao(cartas, semMaster = []) {
 	for (const botao of document.querySelectorAll('.carta')) atualizarCarta(botao)
 	if (!$('#zoom').hidden && cartaAberta) atualizarBotaoZoom()
 	const { aba, setId } = rotaAtual()
-	if (!setId) { if (aba === 'colecoes') desenharColecoes(); else desenharPesquisa() }
+	if (!setId) { if (aba === 'colecoes') desenharColecoes(); else if (aba === 'desejos') desenharDesejos(); else if (aba === 'pesquisa') desenharPesquisa() }
 	atualizarProgressoNaTela()
 }
 
@@ -1635,6 +1756,7 @@ async function carregarNuvem() {
 	nuvem.iniciarNuvem({
 		colecaoLocal: colecaoComoObjeto,
 		semMasterSetLocal: () => [...semMasterSet],
+		desejosLocal: desejosComoObjeto,
 		aoMudarUsuario: mostrarUsuario,
 		aoReceberColecao: receberColecao,
 		aoMudarStatus: mostrarStatus,
@@ -1845,6 +1967,7 @@ async function iniciar() {
 	if (rotuloVersao) rotuloVersao.textContent = VERSAO_APP
 	aplicarTema(ler(CHAVE_TEMA) || 'auto')
 	carregarColecao()
+	carregarDesejos()
 	try {
 		const resposta = await fetch('data/cartas.json')
 		dados = await resposta.json()

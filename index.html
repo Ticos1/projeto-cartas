@@ -52,6 +52,10 @@
 				<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="11" height="15" rx="2"/><path d="M18 8.5l2.2.6-3 10.8-3.6-1"/></svg>
 				<span>Coleções</span>
 			</a>
+			<a class="gaveta-item" href="#/desejos" data-aba="desejos">
+				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.8l6-.8z"/></svg>
+				<span>Lista de Desejos</span>
+			</a>
 			<a class="gaveta-item" href="#/configuracoes" data-aba="configuracoes">
 				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M19 7h1M4 17h1M11 17h9"/><circle cx="16" cy="7" r="2.4"/><circle cx="8" cy="17" r="2.4"/></svg>
 				<span>Configurações</span>
@@ -113,6 +117,9 @@
 	<!-- Carta ampliada (toque longo) -->
 	<div class="fundo-escuro" id="zoom" hidden>
 		<canvas id="zoom-particulas" aria-hidden="true"></canvas>
+		<button class="zoom-estrela" id="zoom-estrela" aria-pressed="false" aria-label="Adicionar à lista de desejos">
+			<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.8l6-.8z"/></svg>
+		</button>
 		<div class="zoom-caixa" role="dialog" aria-label="Carta ampliada">
 			<div class="carta-3d">
 				<div class="ef-halo" aria-hidden="true"></div>
