@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+	<title>Minha Coleção TCG</title>
+	<meta name="description" content="Controle da sua coleção de cartas Pokémon TCG da série Megaevolução.">
+	<meta name="theme-color" content="#f4f5f8" media="(prefers-color-scheme: light)">
+	<meta name="theme-color" content="#14161c" media="(prefers-color-scheme: dark)">
+	<link rel="manifest" href="manifest.webmanifest">
+	<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+	<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-title" content="Coleção TCG">
+	<meta name="apple-mobile-web-app-status-bar-style" content="default">
+	<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+	<header class="topo">
+		<button class="icone-btn" id="voltar" aria-label="Voltar" hidden>
+			<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+		</button>
+		<div class="topo-titulo">
+			<h1 id="titulo">Minha Coleção</h1>
+			<p id="subtitulo"></p>
+		</div>
+		<button class="icone-btn" id="abrir-menu" aria-label="Menu">
+			<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
+		</button>
+	</header>
+
+	<main id="tela"></main>
+
+	<!-- Menu (backup e tema) -->
+	<div class="fundo-escuro" id="menu" hidden>
+		<div class="folha" role="dialog" aria-label="Menu">
+			<h2>Backup da coleção</h2>
+			<p class="dica">Sua coleção fica salva só neste aparelho. Exporte um backup de vez em quando para não perder nada.</p>
+			<button class="botao" id="exportar">Exportar backup</button>
+			<button class="botao secundario" id="importar">Importar backup</button>
+			<input type="file" id="arquivo-backup" accept="application/json,.json" hidden>
+
+			<h2>Tema</h2>
+			<div class="segmentos" id="tema">
+				<button data-tema="auto">Automático</button>
+				<button data-tema="claro">Claro</button>
+				<button data-tema="escuro">Escuro</button>
+			</div>
+
+			<p class="dica rodape">Dados das cartas: TCGdex. Pokémon e seus nomes são marcas da Nintendo / The Pokémon Company.</p>
+			<button class="botao secundario" id="fechar-menu">Fechar</button>
+		</div>
+	</div>
+
+	<!-- Carta ampliada (toque longo) -->
+	<div class="fundo-escuro" id="zoom" hidden>
+		<div class="zoom-caixa" role="dialog" aria-label="Carta ampliada">
+			<img id="zoom-img" alt="">
+			<p id="zoom-nome"></p>
+			<p id="zoom-info" class="dica"></p>
+			<button class="botao" id="zoom-marcar"></button>
+		</div>
+	</div>
+
+	<div class="aviso" id="aviso" role="status" aria-live="polite"></div>
+
+	<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,546 @@
+'use strict'
+
+/* =========================================================
+   Minha Coleção TCG
+   - data/cartas.json: lista de sets e cartas (gerada por scripts/gerar_dados.mjs)
+   - localStorage: quais cartas eu tenho
+   ========================================================= */
+
+const CHAVE_COLECAO = 'colecao-tcg'
+const CHAVE_TEMA = 'colecao-tcg-tema'
+const CHAVE_SEM_PT = 'colecao-tcg-sem-imagem-pt'
+const IMAGENS = 'https://assets.tcgdex.net'
+
+let dados = null              // conteúdo de data/cartas.json
+let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
+const filtros = {}            // filtro escolhido em cada set: 'todas' | 'faltam' | 'tenho'
+const buscas = {}             // texto da busca em cada tela
+
+const $ = seletor => document.querySelector(seletor)
+const tela = $('#tela')
+
+/* ---------- Armazenamento seguro (localStorage pode falhar em modo privado) ---------- */
+function ler(chave) {
+	try { return localStorage.getItem(chave) } catch { return null }
+}
+function gravar(chave, valor) {
+	try { localStorage.setItem(chave, valor); return true } catch { return false }
+}
+
+/* ---------- Coleção ---------- */
+function carregarColecao() {
+	colecao = {}
+	try {
+		const salvo = JSON.parse(ler(CHAVE_COLECAO) || '{}')
+		for (const [set, numeros] of Object.entries(salvo.cartas || {})) {
+			colecao[set] = new Set(numeros)
+		}
+	} catch { /* coleção vazia */ }
+}
+
+function colecaoComoObjeto() {
+	const cartas = {}
+	for (const [set, numeros] of Object.entries(colecao)) {
+		if (numeros.size) cartas[set] = [...numeros]
+	}
+	return cartas
+}
+
+function salvarColecao() {
+	const ok = gravar(CHAVE_COLECAO, JSON.stringify({ versao: 1, cartas: colecaoComoObjeto() }))
+	if (!ok) avisar('Não foi possível salvar. O navegador está em modo privado?')
+}
+
+function tenho(setId, numero) {
+	return colecao[setId]?.has(numero) || false
+}
+
+function alternar(setId, numero) {
+	const numeros = colecao[setId] || (colecao[setId] = new Set())
+	if (numeros.has(numero)) numeros.delete(numero)
+	else numeros.add(numero)
+	salvarColecao()
+	return numeros.has(numero)
+}
+
+function progresso(set) {
+	const numeros = colecao[set.id]
+	const tem = numeros ? set.cartas.filter(c => numeros.has(c.n)).length : 0
+	return { tem, total: set.cartas.length, pct: Math.floor((tem / set.cartas.length) * 100) }
+}
+
+/* ---------- Imagens (português, com reserva em inglês) ---------- */
+// Lembra quais cartas não têm imagem em português, para ir direto na inglesa da próxima vez.
+const semPt = new Set()
+try { JSON.parse(ler(CHAVE_SEM_PT) || '[]').forEach(chave => semPt.add(chave)) } catch { /* lista vazia */ }
+
+function urlImagem(setId, numero, idioma, qualidade = 'low') {
+	return `${IMAGENS}/${idioma}/${dados.serie}/${setId}/${numero}/${qualidade}.webp`
+}
+
+function urlLogo(setId, idioma) {
+	return `${IMAGENS}/${idioma}/${dados.serie}/${setId}/logo.webp`
+}
+
+// Coloca a imagem na <img>: tenta português; se não existir, inglês; se não, mostra só o texto.
+function carregarImagem(img, setId, numero, qualidade) {
+	const chave = `${setId}/${numero}`
+	const idiomas = semPt.has(chave) ? ['en'] : ['pt', 'en']
+	let i = 0
+	img.onerror = () => {
+		if (idiomas[i] === 'pt') {
+			semPt.add(chave)
+			gravar(CHAVE_SEM_PT, JSON.stringify([...semPt]))
+		}
+		i++
+		if (i < idiomas.length) img.src = urlImagem(setId, numero, idiomas[i], qualidade)
+		else img.hidden = true
+	}
+	img.onload = () => img.parentElement.classList.add('com-imagem')
+	img.parentElement.classList.remove('com-imagem')
+	img.hidden = false
+	img.src = urlImagem(setId, numero, idiomas[0], qualidade)
+}
+
+/* ---------- Ajudantes ---------- */
+function semAcento(texto) {
+	return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+}
+
+function numeroExibido(set, carta) {
+	return set.oficiais && /^\d+$/.test(carta.n) ? `${carta.n}/${String(set.oficiais).padStart(3, '0')}` : carta.n
+}
+
+function dataBr(iso) {
+	const [ano, mes, dia] = iso.split('-')
+	return `${dia}/${mes}/${ano}`
+}
+
+function escapar(texto) {
+	return String(texto).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+}
+
+// A busca aceita nome ("pikachu") ou número ("25", "025" ou "25/132").
+function combina(carta, busca) {
+	if (!busca) return true
+	const numeroBuscado = busca.split('/')[0].trim()
+	if (/^\d+$/.test(numeroBuscado)) {
+		return parseInt(carta.n, 10) === parseInt(numeroBuscado, 10)
+	}
+	return semAcento(carta.nome).includes(busca) || semAcento(carta.n) === busca
+}
+
+let temporizadorAviso
+function avisar(mensagem) {
+	const aviso = $('#aviso')
+	aviso.textContent = mensagem
+	aviso.classList.add('visivel')
+	clearTimeout(temporizadorAviso)
+	temporizadorAviso = setTimeout(() => aviso.classList.remove('visivel'), 2600)
+}
+
+function barraHtml(p) {
+	return `<div class="barra${p.pct === 100 ? ' completa' : ''}"><span style="width:${(p.tem / p.total) * 100}%"></span></div>`
+}
+
+function definirTopo(titulo, subtitulo, comVoltar) {
+	$('#titulo').textContent = titulo
+	$('#subtitulo').textContent = subtitulo
+	$('#voltar').hidden = !comVoltar
+	document.title = comVoltar ? `${titulo} · Minha Coleção TCG` : 'Minha Coleção TCG'
+}
+
+/* ---------- Cartas na grade ---------- */
+const ICONE_CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>'
+
+function criarCarta(set, carta, mostrarSet) {
+	const botao = document.createElement('button')
+	botao.className = 'carta' + (tenho(set.id, carta.n) ? ' tenho' : '')
+	botao.dataset.set = set.id
+	botao.dataset.n = carta.n
+	botao.setAttribute('aria-pressed', tenho(set.id, carta.n))
+	botao.innerHTML = `
+		<div class="carta-img">
+			<span class="sem-imagem">${escapar(carta.nome)}</span>
+			<img alt="${escapar(carta.nome)}" loading="lazy" decoding="async">
+			<span class="selo">${ICONE_CHECK}</span>
+		</div>
+		<span class="carta-legenda"><b>${escapar(carta.nome)}</b>${escapar(mostrarSet ? `${set.nome} · ${carta.n}` : numeroExibido(set, carta))}</span>`
+	carregarImagem(botao.querySelector('img'), set.id, carta.n, 'low')
+	return botao
+}
+
+function atualizarCarta(botao) {
+	const marcada = tenho(botao.dataset.set, botao.dataset.n)
+	botao.classList.toggle('tenho', marcada)
+	botao.setAttribute('aria-pressed', marcada)
+}
+
+function montarGrade(itens, mostrarSet) {
+	const grade = document.createElement('div')
+	grade.className = 'grade'
+	for (const { set, carta } of itens) grade.appendChild(criarCarta(set, carta, mostrarSet))
+	return grade
+}
+
+// Toque = marcar/desmarcar.  Toque longo = ver a carta grande.
+let toqueLongo = null
+let foiToqueLongo = false
+
+tela.addEventListener('pointerdown', evento => {
+	const botao = evento.target.closest('.carta')
+	if (!botao) return
+	foiToqueLongo = false
+	const inicio = { x: evento.clientX, y: evento.clientY }
+	clearTimeout(toqueLongo?.timer)
+	toqueLongo = {
+		inicio,
+		timer: setTimeout(() => {
+			foiToqueLongo = true
+			abrirZoom(botao)
+		}, 450),
+	}
+})
+
+tela.addEventListener('pointermove', evento => {
+	if (!toqueLongo) return
+	const { x, y } = toqueLongo.inicio
+	if (Math.abs(evento.clientX - x) > 10 || Math.abs(evento.clientY - y) > 10) clearTimeout(toqueLongo.timer)
+})
+
+for (const tipo of ['pointerup', 'pointercancel', 'pointerleave']) {
+	tela.addEventListener(tipo, () => clearTimeout(toqueLongo?.timer))
+}
+
+tela.addEventListener('contextmenu', evento => {
+	if (evento.target.closest('.carta')) evento.preventDefault()
+})
+
+tela.addEventListener('click', evento => {
+	const botao = evento.target.closest('.carta')
+	if (!botao) return
+	if (foiToqueLongo) { foiToqueLongo = false; return }
+	alternar(botao.dataset.set, botao.dataset.n)
+	atualizarCarta(botao)
+	atualizarProgressoNaTela()
+})
+
+/* ---------- Tela: carta ampliada ---------- */
+let cartaAberta = null
+
+function abrirZoom(botao) {
+	const set = dados.sets.find(s => s.id === botao.dataset.set)
+	const carta = set.cartas.find(c => c.n === botao.dataset.n)
+	cartaAberta = botao
+	carregarImagem($('#zoom-img'), set.id, carta.n, 'high')
+	$('#zoom-img').alt = carta.nome
+	$('#zoom-nome').textContent = carta.nome
+	$('#zoom-info').textContent = [set.nome, numeroExibido(set, carta), carta.raridade].filter(Boolean).join(' · ')
+	atualizarBotaoZoom()
+	$('#zoom').hidden = false
+}
+
+function atualizarBotaoZoom() {
+	const marcada = tenho(cartaAberta.dataset.set, cartaAberta.dataset.n)
+	$('#zoom-marcar').textContent = marcada ? '✓ Tenho esta carta (desmarcar)' : 'Marcar como "tenho"'
+	$('#zoom-marcar').classList.toggle('secundario', marcada)
+}
+
+$('#zoom-marcar').addEventListener('click', evento => {
+	evento.stopPropagation()
+	alternar(cartaAberta.dataset.set, cartaAberta.dataset.n)
+	atualizarCarta(cartaAberta)
+	atualizarBotaoZoom()
+	atualizarProgressoNaTela()
+})
+
+$('#zoom').addEventListener('click', evento => {
+	if (evento.target.id !== 'zoom-marcar') $('#zoom').hidden = true
+})
+
+/* ---------- Tela: início (lista de sets) ---------- */
+function telaInicio() {
+	definirTopo('Minha Coleção', 'Série Megaevolução', false)
+	const busca = buscas.inicio || ''
+
+	tela.innerHTML = `
+		<section class="resumo" id="resumo"></section>
+		<input class="busca" id="busca" type="search" placeholder="Buscar carta em todos os sets (nome ou nº)" value="${escapar(busca)}" autocomplete="off" enterkeyhint="search">
+		<div id="conteudo"></div>`
+
+	atualizarResumo()
+
+	const campo = $('#busca')
+	campo.addEventListener('input', () => {
+		buscas.inicio = campo.value
+		desenharInicio()
+	})
+	desenharInicio()
+}
+
+function atualizarResumo() {
+	let tem = 0, total = 0
+	for (const set of dados.sets) {
+		const p = progresso(set)
+		tem += p.tem
+		total += p.total
+	}
+	const geral = { tem, total, pct: Math.floor((tem / total) * 100) }
+	$('#resumo').innerHTML = `
+		<div class="resumo-linha"><strong>${geral.pct}%</strong><span>${tem} de ${total} cartas</span></div>
+		${barraHtml(geral)}`
+}
+
+function desenharInicio() {
+	const conteudo = $('#conteudo')
+	const busca = semAcento((buscas.inicio || '').trim())
+
+	if (busca) {
+		const itens = []
+		for (const set of dados.sets) {
+			for (const carta of set.cartas) if (combina(carta, busca)) itens.push({ set, carta })
+		}
+		conteudo.innerHTML = itens.length
+			? `<h2 class="titulo-secao">${itens.length} carta${itens.length > 1 ? 's' : ''} encontrada${itens.length > 1 ? 's' : ''}</h2>`
+			: '<p class="vazio">Nenhuma carta encontrada.</p>'
+		if (itens.length) conteudo.appendChild(montarGrade(itens.slice(0, 200), true))
+		return
+	}
+
+	conteudo.innerHTML = `<ul class="lista-sets">${dados.sets.map(set => {
+		const p = progresso(set)
+		return `
+			<li><a class="item-set" href="#/set/${encodeURIComponent(set.id)}" data-set="${escapar(set.id)}">
+				<span class="logo-set"><img alt="" data-logo="${escapar(set.id)}"><span hidden>${escapar(set.sigla || set.id)}</span></span>
+				<span class="item-set-info">
+					<b>${escapar(set.nome)}</b>
+					<small>${p.tem} de ${p.total} · ${dataBr(set.lancamento)}</small>
+					${barraHtml(p)}
+				</span>
+				<span class="pct${p.pct === 100 ? ' completa' : ''}">${p.pct}%</span>
+			</a></li>`
+	}).join('')}</ul>`
+
+	// Logo do set: português, senão inglês, senão a sigla em texto.
+	for (const img of conteudo.querySelectorAll('img[data-logo]')) {
+		const id = img.dataset.logo
+		img.onerror = () => {
+			if (img.src.includes('/pt/')) img.src = urlLogo(id, 'en')
+			else { img.hidden = true; img.nextElementSibling.hidden = false }
+		}
+		img.src = urlLogo(id, 'pt')
+	}
+}
+
+/* ---------- Tela: um set (grade de cartas) ---------- */
+function telaSet(setId) {
+	const set = dados.sets.find(s => s.id === setId)
+	if (!set) { location.hash = '#/'; return }
+
+	filtros[set.id] ||= 'todas'
+	const busca = buscas[set.id] || ''
+
+	definirTopo(set.nome, '', true)
+	tela.innerHTML = `
+		<section class="resumo" id="resumo-set"></section>
+		<input class="busca" id="busca" type="search" placeholder="Buscar por nome ou número" value="${escapar(busca)}" autocomplete="off" enterkeyhint="search">
+		<div class="segmentos" id="filtro">
+			<button data-filtro="todas">Todas</button>
+			<button data-filtro="faltam">Faltam</button>
+			<button data-filtro="tenho">Tenho</button>
+		</div>
+		<div id="conteudo"></div>`
+
+	atualizarProgressoNaTela()
+
+	const campo = $('#busca')
+	campo.addEventListener('input', () => {
+		buscas[set.id] = campo.value
+		desenharGradeSet(set)
+	})
+
+	$('#filtro').addEventListener('click', evento => {
+		const botao = evento.target.closest('button')
+		if (!botao) return
+		filtros[set.id] = botao.dataset.filtro
+		desenharGradeSet(set)
+	})
+
+	desenharGradeSet(set)
+}
+
+function desenharGradeSet(set) {
+	const filtro = filtros[set.id]
+	for (const botao of document.querySelectorAll('#filtro button')) {
+		botao.classList.toggle('ativo', botao.dataset.filtro === filtro)
+	}
+
+	const busca = semAcento((buscas[set.id] || '').trim())
+	const itens = set.cartas
+		.filter(carta => {
+			if (filtro === 'faltam' && tenho(set.id, carta.n)) return false
+			if (filtro === 'tenho' && !tenho(set.id, carta.n)) return false
+			return combina(carta, busca)
+		})
+		.map(carta => ({ set, carta }))
+
+	const conteudo = $('#conteudo')
+	conteudo.innerHTML = ''
+	if (itens.length) {
+		conteudo.appendChild(montarGrade(itens, false))
+	} else {
+		const mensagem = busca ? 'Nenhuma carta encontrada.'
+			: filtro === 'faltam' ? 'Parabéns! Você completou este set. 🎉'
+			: filtro === 'tenho' ? 'Você ainda não marcou nenhuma carta deste set. Toque numa carta para marcar.'
+			: 'Nenhuma carta.'
+		conteudo.innerHTML = `<p class="vazio">${mensagem}</p>`
+	}
+}
+
+// Atualiza números e barras depois de marcar uma carta (sem redesenhar a grade).
+function atualizarProgressoNaTela() {
+	if ($('#resumo')) atualizarResumo()
+	const resumoSet = $('#resumo-set')
+	if (resumoSet) {
+		const set = dados.sets.find(s => s.id === rotaAtual().setId)
+		const p = progresso(set)
+		resumoSet.innerHTML = `
+			<div class="resumo-linha"><strong>${p.pct}%</strong><span>${p.tem} de ${p.total} cartas · faltam ${p.total - p.tem}</span></div>
+			${barraHtml(p)}`
+	}
+}
+
+/* ---------- Navegação (endereços com #) ---------- */
+function rotaAtual() {
+	const partes = location.hash.replace(/^#\/?/, '').split('/')
+	return partes[0] === 'set' ? { setId: decodeURIComponent(partes[1] || '') } : {}
+}
+
+function navegar() {
+	$('#zoom').hidden = true
+	const { setId } = rotaAtual()
+	if (setId) telaSet(setId)
+	else telaInicio()
+	window.scrollTo(0, 0)
+}
+
+window.addEventListener('hashchange', navegar)
+
+// Se o app foi aberto direto num set, "voltar" leva para o início em vez de sair do app.
+let navegouDentroDoApp = false
+window.addEventListener('hashchange', () => { navegouDentroDoApp = true })
+
+$('#voltar').addEventListener('click', () => {
+	if (navegouDentroDoApp) history.back()
+	else location.hash = '#/'
+})
+
+/* ---------- Menu: backup e tema ---------- */
+$('#abrir-menu').addEventListener('click', () => {
+	marcarTemaNoMenu()
+	$('#menu').hidden = false
+})
+$('#fechar-menu').addEventListener('click', () => { $('#menu').hidden = true })
+$('#menu').addEventListener('click', evento => {
+	if (evento.target.id === 'menu') $('#menu').hidden = true
+})
+
+$('#exportar').addEventListener('click', async () => {
+	const cartas = colecaoComoObjeto()
+	const quantidade = Object.values(cartas).reduce((soma, lista) => soma + lista.length, 0)
+	const backup = { app: 'minha-colecao-tcg', versao: 1, exportadoEm: new Date().toISOString(), cartas }
+	const nome = `colecao-tcg-${new Date().toISOString().slice(0, 10)}.json`
+	const arquivo = new File([JSON.stringify(backup, null, 1)], nome, { type: 'application/json' })
+
+	// No celular, abre o menu de compartilhar (salvar no Drive, mandar no WhatsApp...).
+	if (navigator.canShare?.({ files: [arquivo] })) {
+		try {
+			await navigator.share({ files: [arquivo], title: 'Backup da coleção' })
+			avisar(`Backup com ${quantidade} cartas exportado.`)
+			return
+		} catch (erro) {
+			if (erro.name === 'AbortError') return
+		}
+	}
+	const link = document.createElement('a')
+	link.href = URL.createObjectURL(arquivo)
+	link.download = nome
+	link.click()
+	setTimeout(() => URL.revokeObjectURL(link.href), 1000)
+	avisar(`Backup com ${quantidade} cartas baixado.`)
+})
+
+$('#importar').addEventListener('click', () => $('#arquivo-backup').click())
+
+$('#arquivo-backup').addEventListener('change', async evento => {
+	const arquivo = evento.target.files[0]
+	evento.target.value = ''
+	if (!arquivo) return
+	try {
+		const backup = JSON.parse(await arquivo.text())
+		if (!backup || typeof backup.cartas !== 'object') throw new Error('formato')
+		const novas = {}
+		let quantidade = 0
+		for (const [set, numeros] of Object.entries(backup.cartas)) {
+			if (!Array.isArray(numeros)) continue
+			novas[set] = new Set(numeros.map(String))
+			quantidade += novas[set].size
+		}
+		const atuais = Object.values(colecao).reduce((soma, s) => soma + s.size, 0)
+		if (!confirm(`Substituir sua coleção atual (${atuais} cartas) pelo backup (${quantidade} cartas)?`)) return
+		colecao = novas
+		salvarColecao()
+		$('#menu').hidden = true
+		navegar()
+		avisar(`Backup importado: ${quantidade} cartas.`)
+	} catch {
+		avisar('Esse arquivo não parece ser um backup válido.')
+	}
+})
+
+function aplicarTema(tema) {
+	if (tema === 'claro' || tema === 'escuro') document.documentElement.dataset.tema = tema
+	else delete document.documentElement.dataset.tema
+	// Cor da barra do sistema no celular
+	const escuro = tema === 'escuro' || (tema !== 'claro' && matchMedia('(prefers-color-scheme: dark)').matches)
+	for (const meta of document.querySelectorAll('meta[name="theme-color"]')) {
+		meta.content = escuro ? '#14161c' : '#f4f5f8'
+	}
+}
+
+function marcarTemaNoMenu() {
+	const atual = ler(CHAVE_TEMA) || 'auto'
+	for (const botao of document.querySelectorAll('#tema button')) {
+		botao.classList.toggle('ativo', botao.dataset.tema === atual)
+	}
+}
+
+$('#tema').addEventListener('click', evento => {
+	const botao = evento.target.closest('button')
+	if (!botao) return
+	gravar(CHAVE_TEMA, botao.dataset.tema)
+	aplicarTema(botao.dataset.tema)
+	marcarTemaNoMenu()
+})
+
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => aplicarTema(ler(CHAVE_TEMA) || 'auto'))
+
+/* ---------- Início ---------- */
+async function iniciar() {
+	aplicarTema(ler(CHAVE_TEMA) || 'auto')
+	carregarColecao()
+	try {
+		const resposta = await fetch('data/cartas.json')
+		dados = await resposta.json()
+	} catch {
+		tela.innerHTML = '<p class="vazio">Não foi possível carregar a lista de cartas. Verifique a internet e tente de novo.</p>'
+		return
+	}
+	navegar()
+
+	if ('serviceWorker' in navigator) {
+		navigator.serviceWorker.register('sw.js').catch(() => { /* app funciona sem modo offline */ })
+	}
+}
+
+iniciar()

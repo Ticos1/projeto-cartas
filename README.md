@@ -1,7 +1,58 @@
-# Minha Coleção Pokémon TCG (PT-BR)
+# Minha Coleção TCG (PT-BR)
 
-PWA para marcar as cartas Pokémon TCG (Copag) que eu tenho e ver o que falta em cada set.
+App (PWA) para marcar as cartas Pokémon TCG da Copag que eu tenho e ver o que falta
+em cada set da série **Megaevolução**.
 
-- **Etapa 1 — validação dos dados:** veja [docs/etapa1-validacao.md](docs/etapa1-validacao.md)
-- **Escopo:** só os sets da série Megaevolução (me01 até me05, incluindo Heróis Excelsos)
-- **Etapa 2 — app:** em breve
+## O que o app faz
+
+- Lista dos sets com a porcentagem completa de cada um (e o total geral).
+- Tela do set com as cartas em grade:
+  - **toque** numa carta = marca/desmarca "tenho";
+  - **toque longo** = mostra a carta grande;
+  - filtros **Todas / Faltam / Tenho**.
+- Busca por nome ou número (ex.: `pikachu`, `25`, `025/094`), dentro do set ou em todos.
+- Coleção salva no próprio aparelho, com **exportar/importar backup** (menu ⋮).
+- Modo escuro automático (ou escolha manual no menu ⋮).
+- Instalável na tela inicial e funciona sem internet (as imagens já vistas ficam guardadas).
+
+Sets incluídos: Megaevolução, Fogo Fantasmagórico, Heróis Excelsos, Equilíbrio Perfeito,
+Caos Ascendente, Escuridão Absoluta, Celebração de 30 Anos, Coleção Clássica de 30 Anos
+e Promos MEP.
+
+## Arquivos
+
+| Arquivo | Para que serve |
+|---|---|
+| `index.html` | A página do app |
+| `styles.css` | Visual (cores, grade, modo escuro) |
+| `app.js` | Toda a lógica (telas, marcar cartas, busca, backup) |
+| `data/cartas.json` | Lista de sets e cartas, gerada a partir do TCGdex |
+| `manifest.webmanifest` | Nome e ícone para instalar na tela inicial |
+| `sw.js` | Service worker: faz o app funcionar offline |
+| `icons/` | Ícones do app |
+| `scripts/gerar_dados.mjs` | Gera o `data/cartas.json` (para atualizar ou adicionar sets) |
+| `docs/etapa1-validacao.md` | Análise dos dados em português (Etapa 1) |
+
+As imagens das cartas vêm de `assets.tcgdex.net`: primeiro em português e, se não houver,
+em inglês.
+
+## Testar no computador
+
+Precisa de um servidor simples (abrir o arquivo direto não funciona com service worker):
+
+```bash
+python3 -m http.server 8000
+```
+
+Depois abra `http://localhost:8000`.
+
+## Atualizar a lista de cartas
+
+```bash
+git clone --depth 1 https://github.com/tcgdex/cards-database ../cards-database
+node scripts/gerar_dados.mjs ../cards-database
+```
+
+Para mudar os sets, edite a lista `SETS` no começo de `scripts/gerar_dados.mjs`.
+Depois de mudar qualquer arquivo do app, aumente `VERSAO` em `sw.js` para os
+celulares pegarem a versão nova.
