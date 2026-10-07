@@ -10,7 +10,7 @@ const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v20'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v21'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -180,7 +180,8 @@ function definirTopo(titulo, subtitulo, comVoltar) {
 	$('#titulo').textContent = titulo
 	$('#subtitulo').textContent = subtitulo
 	$('#voltar').hidden = !comVoltar
-	document.title = comVoltar ? `${titulo} · Minha Coleção TCG` : 'Minha Coleção TCG'
+	$('#abrir-gaveta').hidden = comVoltar
+	document.title = `${titulo} · Minha Coleção TCG`
 }
 
 /* ---------- Cartas na grade ---------- */
@@ -639,29 +640,29 @@ $('#zoom').addEventListener('click', evento => {
 $('#zoom').addEventListener('contextmenu', evento => evento.preventDefault())
 
 /* ---------- Tela: início (lista de sets) ---------- */
-function telaInicio() {
-	definirTopo('Minha Coleção', 'Série Megaevolução', false)
-	const busca = buscas.inicio || ''
+/* ---------- Aba: Coleções (lista de sets) ---------- */
+function telaColecoes() {
+	definirTopo('Coleções', 'Série Megaevolução', false)
 
 	tela.innerHTML = `
-		<button class="convite" id="convite" ${usuario || !nuvem ? 'hidden' : ''}>
-			<span aria-hidden="true">☁️</span>
-			<span><b>Sincronize o celular e o PC.</b> Toque aqui para entrar ou criar sua conta.</span>
-		</button>
+		${htmlConvite()}
 		<section class="resumo" id="resumo"></section>
-		<input class="busca" id="busca" type="search" placeholder="Buscar carta em todos os sets (nome ou nº)" value="${escapar(busca)}" autocomplete="off" enterkeyhint="search">
 		<div id="conteudo"></div>`
 
 	atualizarResumo()
-	$('#convite').addEventListener('click', abrirMenu)
-
-	const campo = $('#busca')
-	campo.addEventListener('input', () => {
-		buscas.inicio = campo.value
-		desenharInicio()
-	})
-	desenharInicio()
+	ligarConvite()
+	desenharColecoes()
 }
+
+// Convite para entrar na conta (some quando já está conectado).
+function htmlConvite() {
+	return `
+		<button class="convite" id="convite" ${usuario || !nuvem ? 'hidden' : ''}>
+			<span aria-hidden="true">☁️</span>
+			<span><b>Sincronize o celular e o PC.</b> Toque aqui para entrar ou criar sua conta.</span>
+		</button>`
+}
+function ligarConvite() { $('#convite').addEventListener('click', abrirMenu) }
 
 function atualizarResumo() {
 	let tem = 0, total = 0
@@ -676,22 +677,8 @@ function atualizarResumo() {
 		${barraHtml(geral)}`
 }
 
-function desenharInicio() {
+function desenharColecoes() {
 	const conteudo = $('#conteudo')
-	const busca = semAcento((buscas.inicio || '').trim())
-
-	if (busca) {
-		const itens = []
-		for (const set of dados.sets) {
-			for (const carta of cartasDoSet(set)) if (combina(carta, busca)) itens.push({ set, carta })
-		}
-		conteudo.innerHTML = itens.length
-			? `<h2 class="titulo-secao">${itens.length} carta${itens.length > 1 ? 's' : ''} encontrada${itens.length > 1 ? 's' : ''}</h2>`
-			: '<p class="vazio">Nenhuma carta encontrada.</p>'
-		if (itens.length) conteudo.appendChild(montarGrade(itens.slice(0, 200), true))
-		return
-	}
-
 	conteudo.innerHTML = `<ul class="lista-sets">${dados.sets.map(set => {
 		const p = progresso(set)
 		return `
@@ -715,10 +702,117 @@ function desenharInicio() {
 	}
 }
 
+/* ---------- Aba: Pesquisa ---------- */
+const ORDEM_RARIDADES = ['Comum', 'Incomum', 'Rara', 'Rara Dupla', 'Ultra Rara', 'Rara Ilustrada', 'Rara Ilustrada Especial',
+	'Mega Rara Hiper', 'Rara Mega Ataque', 'Rara Pikachu', 'Rara Futurista', 'Rara RGB', 'Promo']
+const PASSO_PESQUISA = 60
+// Os filtros ficam guardados enquanto o app está aberto (ao trocar de aba e voltar, continuam).
+const pesquisa = { texto: '', set: '', raridade: '', status: 'todas', limite: PASSO_PESQUISA }
+
+function raridadesDasCartas() {
+	const achadas = new Set()
+	for (const set of dados.sets) for (const carta of set.cartas) if (carta.raridade) achadas.add(carta.raridade)
+	return [...ORDEM_RARIDADES.filter(r => achadas.has(r)), ...[...achadas].filter(r => !ORDEM_RARIDADES.includes(r))]
+}
+
+function telaPesquisa() {
+	definirTopo('Pesquisa', 'Todas as cartas', false)
+	const opcao = (valor, texto, atual) => `<option value="${escapar(valor)}"${valor === atual ? ' selected' : ''}>${escapar(texto)}</option>`
+
+	tela.innerHTML = `
+		${htmlConvite()}
+		<input class="busca" id="busca" type="search" placeholder="Nome ou número da carta" value="${escapar(pesquisa.texto)}" autocomplete="off" enterkeyhint="search">
+		<div class="filtros">
+			<select id="filtro-set" aria-label="Filtrar por set">
+				${opcao('', 'Todos os sets', pesquisa.set)}${dados.sets.map(s => opcao(s.id, s.nome, pesquisa.set)).join('')}
+			</select>
+			<select id="filtro-raridade" aria-label="Filtrar por raridade">
+				${opcao('', 'Todas as raridades', pesquisa.raridade)}${raridadesDasCartas().map(r => opcao(r, r, pesquisa.raridade)).join('')}
+			</select>
+		</div>
+		<div class="segmentos" id="filtro-status">
+			<button data-status="todas">Todas</button>
+			<button data-status="faltam">Faltam</button>
+			<button data-status="tenho">Tenho</button>
+		</div>
+		<div id="conteudo"></div>`
+
+	ligarConvite()
+	let espera = 0
+	$('#busca').addEventListener('input', () => {
+		clearTimeout(espera)
+		espera = setTimeout(() => {
+			pesquisa.texto = $('#busca').value
+			pesquisa.limite = PASSO_PESQUISA
+			desenharPesquisa()
+		}, 120)
+	})
+	$('#filtro-set').addEventListener('change', evento => { pesquisa.set = evento.target.value; pesquisa.limite = PASSO_PESQUISA; desenharPesquisa() })
+	$('#filtro-raridade').addEventListener('change', evento => { pesquisa.raridade = evento.target.value; pesquisa.limite = PASSO_PESQUISA; desenharPesquisa() })
+	$('#filtro-status').addEventListener('click', evento => {
+		const botao = evento.target.closest('button')
+		if (!botao) return
+		pesquisa.status = botao.dataset.status
+		pesquisa.limite = PASSO_PESQUISA
+		desenharPesquisa()
+	})
+	desenharPesquisa()
+}
+
+function desenharPesquisa() {
+	for (const botao of document.querySelectorAll('#filtro-status button')) {
+		botao.classList.toggle('ativo', botao.dataset.status === pesquisa.status)
+	}
+	const conteudo = $('#conteudo')
+	const texto = semAcento(pesquisa.texto.trim())
+
+	if (!texto && !pesquisa.set && !pesquisa.raridade && pesquisa.status === 'todas') {
+		conteudo.innerHTML = `
+			<div class="vazio dica-pesquisa">
+				<div class="icone-grande" aria-hidden="true">🔍</div>
+				<p><b>Busque uma carta</b></p>
+				<p>Digite o nome (ex.: <i>Pikachu</i>) ou o número (ex.: <i>25</i>), ou use os filtros acima.</p>
+			</div>`
+		return
+	}
+
+	const itens = []
+	for (const set of dados.sets) {
+		if (pesquisa.set && set.id !== pesquisa.set) continue
+		for (const carta of cartasDoSet(set)) {
+			if (pesquisa.raridade && carta.raridade !== pesquisa.raridade) continue
+			const marcada = tenho(set.id, carta.n)
+			if (pesquisa.status === 'faltam' && marcada) continue
+			if (pesquisa.status === 'tenho' && !marcada) continue
+			if (combina(carta, texto)) itens.push({ set, carta })
+		}
+	}
+
+	if (!itens.length) {
+		conteudo.innerHTML = '<p class="vazio">Nenhuma carta encontrada.</p>'
+		return
+	}
+	conteudo.innerHTML = `<h2 class="titulo-secao">${itens.length} carta${itens.length > 1 ? 's' : ''} encontrada${itens.length > 1 ? 's' : ''}</h2>`
+	conteudo.appendChild(montarGrade(itens.slice(0, pesquisa.limite), true))
+	if (itens.length > pesquisa.limite) {
+		const mais = document.createElement('button')
+		mais.className = 'botao secundario'
+		mais.id = 'mais-resultados'
+		mais.textContent = `Mostrar mais (${itens.length - pesquisa.limite} restantes)`
+		mais.addEventListener('click', () => {
+			const y = window.scrollY
+			pesquisa.limite += PASSO_PESQUISA
+			desenharPesquisa()
+			window.scrollTo(0, y)
+		})
+		conteudo.appendChild(mais)
+	}
+}
+
 /* ---------- Tela: um set (grade de cartas) ---------- */
 function telaSet(setId) {
 	const set = dados.sets.find(s => s.id === setId)
-	if (!set) { location.hash = '#/'; return }
+	if (!set) { location.hash = '#/colecoes'; return }
 
 	filtros[set.id] ||= 'todas'
 	const busca = buscas[set.id] || ''
@@ -818,9 +912,12 @@ function atualizarProgressoNaTela() {
 }
 
 /* ---------- Navegação (endereços com #) ---------- */
+// Abas: #/pesquisa (a primeira, abre por padrão) e #/colecoes. Um set (#/set/ID) fica dentro de Coleções.
 function rotaAtual() {
 	const partes = location.hash.replace(/^#\/?/, '').split('/')
-	return partes[0] === 'set' ? { setId: decodeURIComponent(partes[1] || '') } : {}
+	if (partes[0] === 'set') return { aba: 'colecoes', setId: decodeURIComponent(partes[1] || '') }
+	if (partes[0] === 'colecoes') return { aba: 'colecoes' }
+	return { aba: 'pesquisa' }
 }
 
 function navegar() {
@@ -830,9 +927,12 @@ function navegar() {
 	entradasDeSobreposicao = 0
 	// Toda tela que o app abre fica marcada como "do app" no histórico.
 	if (!history.state?.app) history.replaceState({ app: true }, '')
-	const { setId } = rotaAtual()
+	$('#gaveta').hidden = true
+	const { setId, aba } = rotaAtual()
 	if (setId) telaSet(setId)
-	else telaInicio()
+	else if (aba === 'colecoes') telaColecoes()
+	else telaPesquisa()
+	marcarAbaNaGaveta(aba)
 	window.scrollTo(0, 0)
 }
 
@@ -866,6 +966,7 @@ window.addEventListener('popstate', () => {
 	entradasDeSobreposicao--
 	if (!$('#zoom').hidden) fecharZoom(true, true, true)
 	else if (!$('#menu').hidden) fecharMenu(true)
+	else if (!$('#gaveta').hidden) fecharGaveta(true)
 })
 
 function prepararHistorico() {
@@ -874,7 +975,7 @@ function prepararHistorico() {
 	const { setId } = rotaAtual()
 	if (setId) {
 		const destino = location.hash
-		history.replaceState({ app: true }, '', '#/')
+		history.replaceState({ app: true }, '', '#/colecoes')
 		history.pushState({ app: true }, '', destino)
 	} else {
 		history.replaceState({ app: true }, '')
@@ -884,9 +985,54 @@ function prepararHistorico() {
 $('#voltar').addEventListener('click', () => {
 	const antes = location.hash
 	history.back()
-	// Se não havia para onde voltar, vai para a lista direto.
-	setTimeout(() => { if (location.hash === antes && rotaAtual().setId) location.hash = '#/' }, 400)
+	// Se não havia para onde voltar, vai para a lista de coleções direto.
+	setTimeout(() => { if (location.hash === antes && rotaAtual().setId) location.hash = '#/colecoes' }, 400)
 })
+
+/* ---------- Abas (botão de três riscos) ---------- */
+function marcarAbaNaGaveta(aba) {
+	for (const item of document.querySelectorAll('.gaveta-item')) {
+		if (item.dataset.aba === aba) item.setAttribute('aria-current', 'page')
+		else item.removeAttribute('aria-current')
+	}
+}
+
+function abrirGaveta() {
+	if (!$('#gaveta').hidden) return
+	marcarAbaNaGaveta(rotaAtual().aba)
+	$('#gaveta').hidden = false
+	registrarSobreposicao()
+	if (semAnimacao()) return
+	$('.gaveta').animate([{ transform: 'translateX(-100%)' }, { transform: 'none' }], { duration: 220, easing: 'ease-out' })
+	$('#gaveta').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220 })
+}
+
+function fecharGaveta(veioDoHistorico = false) {
+	if ($('#gaveta').hidden) return
+	$('#gaveta').hidden = true
+	if (!veioDoHistorico) liberarSobreposicao()
+}
+
+$('#abrir-gaveta').addEventListener('click', abrirGaveta)
+$('#gaveta').addEventListener('click', evento => {
+	if (evento.target.id === 'gaveta') fecharGaveta()
+})
+for (const item of document.querySelectorAll('.gaveta-item')) {
+	item.addEventListener('click', evento => {
+		evento.preventDefault()
+		const destino = item.getAttribute('href')
+		if (item.dataset.aba === rotaAtual().aba) { fecharGaveta(); return }
+		// A entrada de histórico da gaveta vira a da nova aba: o voltar não passa pela gaveta.
+		$('#gaveta').hidden = true
+		if (entradasDeSobreposicao > 0) {
+			entradasDeSobreposicao--
+			history.replaceState({ app: true }, '', destino)
+			navegar()
+		} else {
+			location.hash = destino
+		}
+	})
+}
 
 /* ---------- Menu: backup e tema ---------- */
 function abrirMenu() {
@@ -1048,7 +1194,8 @@ function receberColecao(cartas, semMaster = []) {
 	// Atualiza a tela sem perder a rolagem nem o que foi digitado na busca.
 	for (const botao of document.querySelectorAll('.carta')) atualizarCarta(botao)
 	if (!$('#zoom').hidden && cartaAberta) atualizarBotaoZoom()
-	if (!rotaAtual().setId && !(buscas.inicio || '').trim()) desenharInicio()
+	const { aba, setId } = rotaAtual()
+	if (!setId) { if (aba === 'colecoes') desenharColecoes(); else desenharPesquisa() }
 	atualizarProgressoNaTela()
 }
 

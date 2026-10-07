@@ -13,7 +13,11 @@ em cada set da série **Megaevolução**.
 
 ## O que o app faz
 
-- Lista dos sets com a porcentagem completa de cada um (e o total geral).
+- **Abas** pelo botão de três riscos (canto superior esquerdo): **Pesquisa** (a primeira, abre por
+  padrão) e **Coleções**.
+- Aba **Pesquisa**: busca por nome ou número em todos os sets, com filtros de set, raridade e
+  situação (Todas / Faltam / Tenho).
+- Aba **Coleções**: lista dos sets com a porcentagem completa de cada um (e o total geral).
 - Tela do set com as cartas em grade:
   - **toque** numa carta = marca/desmarca "tenho";
   - **toque longo** = mostra a carta grande, com o botão de **comprar na Liga Pokémon**
@@ -134,3 +138,10 @@ Quando a carta termina de girar e para de frente, ela solta efeitos conforme a r
 partículas. Comum não tem efeito. Os efeitos aparecem só na entrada da carta (cerca de 2 segundos)
 e depois somem, deixando a carta limpa. Para mudar ou criar um efeito, edite essa tabela.
 Quem desligou as animações no celular vê só um clarão rápido, sem movimento.
+
+## Abas
+
+- Endereços: `#/pesquisa` (padrão), `#/colecoes` e `#/set/ID` (um set fica dentro de Coleções).
+- A gaveta (três riscos) é uma sobreposição no histórico: o botão voltar do celular só a fecha.
+- Para criar uma aba nova: um item em `<nav class="gaveta">` no `index.html`, uma função
+  `telaXxx()` em `app.js` e o caso correspondente em `rotaAtual()` e `navegar()`.
