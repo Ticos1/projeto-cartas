@@ -10,7 +10,7 @@ const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v11'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v12'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -393,14 +393,55 @@ async function fecharZoom(animar = true, forcar = false) {
 	for (const el of [$('#zoom'), $('#zoom-giro'), $('#zoom-detalhes')]) el.getAnimations().forEach(a => a.cancel())
 }
 
+/* ---------- Liga Pokémon ---------- */
+const LIGA = 'https://www.ligapokemon.com.br/'
+
+// A Liga escreve os endereços com + no lugar de espaço e codifica ( ) / e acentos.
+function codificarLiga(texto) {
+	return encodeURIComponent(texto)
+		.replace(/%20/g, '+')
+		.replace(/[!'()*~]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+}
+
+// Endereço da carta na Liga: "Nome(número/total)", ex.: Mega Darkrai ex(116/084).
+// Em coleções onde a numeração da Liga não bate com a nossa (Coleção Clássica, promos),
+// o botão leva para a busca da Liga pelo nome da carta.
+function linkLiga(set, carta) {
+	const busca = `${LIGA}?view=cards%2Fsearch&card=${codificarLiga(carta.nome)}&tipo=1`
+	let total = null
+	if (set.id === '30th' && /^[BGR]$/.test(carta.n)) total = 'RGB'
+	else if (/^\d+$/.test(carta.n) && set.oficiais > 0 && set.id !== '30th-c') total = String(set.oficiais).padStart(3, '0')
+	if (!total) return { url: busca, busca, exato: false }
+	return { url: `${LIGA}?view=cards/card&card=${codificarLiga(`${carta.nome}(${carta.n}/${total})`)}`, busca, exato: true }
+}
+
 function atualizarBotaoZoom() {
 	const marcada = tenho(cartaAberta.dataset.set, cartaAberta.dataset.n)
+	// Só quem ainda não tem a carta vê o botão de comprar.
+	const set = dados.sets.find(s => s.id === cartaAberta.dataset.set)
+	const carta = set.cartas.find(c => c.n === cartaAberta.dataset.n)
+	const liga = linkLiga(set, carta)
+	$('#zoom-liga').hidden = marcada
+	$('#zoom-comprar').href = liga.url
+	$('#zoom-comprar-texto').textContent = liga.exato ? 'Comprar na Liga Pokémon' : 'Buscar na Liga Pokémon'
+	$('#zoom-buscar').href = liga.busca
+	$('#zoom-buscar').hidden = !liga.exato
 	$('#zoom-status').hidden = !marcada
 	$('#zoom-marcar').textContent = marcada ? 'Desmarcar' : 'Marcar como "tenho"'
 	$('#zoom-marcar').classList.toggle('secundario', marcada)
 }
 
 $('#zoom').addEventListener('pointerdown', () => { toqueComecouNoZoom = true })
+
+// Os links da Liga também ignoram o "soltar" do dedo que segurou a carta.
+for (const link of [$('#zoom-comprar'), $('#zoom-buscar')]) {
+	link.addEventListener('click', evento => {
+		evento.stopPropagation()
+		const novoToque = toqueComecouNoZoom || evento.detail === 0
+		toqueComecouNoZoom = false
+		if (!novoToque) evento.preventDefault()
+	})
+}
 
 $('#zoom-marcar').addEventListener('click', evento => {
 	evento.stopPropagation()
@@ -419,7 +460,7 @@ $('#zoom-marcar').addEventListener('click', evento => {
 $('#zoom').addEventListener('click', evento => {
 	const novoToque = toqueComecouNoZoom
 	toqueComecouNoZoom = false
-	if (novoToque && evento.target.id !== 'zoom-marcar') fecharZoom()
+	if (novoToque && !evento.target.closest('button, a')) fecharZoom()
 })
 $('#zoom').addEventListener('contextmenu', evento => evento.preventDefault())
 

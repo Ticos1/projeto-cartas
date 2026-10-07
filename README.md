@@ -16,7 +16,8 @@ em cada set da série **Megaevolução**.
 - Lista dos sets com a porcentagem completa de cada um (e o total geral).
 - Tela do set com as cartas em grade:
   - **toque** numa carta = marca/desmarca "tenho";
-  - **toque longo** = mostra a carta grande;
+  - **toque longo** = mostra a carta grande, com o botão de **comprar na Liga Pokémon**
+    (nas cartas que faltam);
   - filtros **Todas / Faltam / Tenho**.
 - Busca por nome ou número (ex.: `pikachu`, `25`, `025/094`), dentro do set ou em todos.
 - **Conta (e-mail e senha)** para sincronizar a coleção entre celular e PC (ícone ☁️ no topo).
@@ -96,3 +97,13 @@ celulares pegarem a versão nova.
 - Assinatura: a chave e a senha ficam **só** nos segredos do repositório
   (`ANDROID_KEYSTORE_BASE64` e `ANDROID_KEYSTORE_PASSWORD`), nunca no código.
   Guarde uma cópia delas: sem a mesma chave, atualizações não instalam por cima do app.
+
+## Liga Pokémon (botão de comprar)
+
+- O botão aparece ao segurar uma carta que **ainda não foi marcada** e abre a página da carta em
+  `ligapokemon.com.br`. O formato do endereço é `?view=cards/card&card=Nome(número/total)`,
+  copiado dos links públicos da própria Liga (ver `linkLiga` em `app.js`).
+- Na Coleção Clássica de 30 Anos e nas Promos MEP a numeração da Liga é diferente da nossa;
+  nelas o botão abre a **busca da Liga pelo nome** da carta.
+- A Liga protege as páginas internas contra robôs, então os links não são testados
+  automaticamente: confira algumas cartas depois de mudar essa parte.
