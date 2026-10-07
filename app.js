@@ -10,7 +10,7 @@ const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v15'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v16'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -974,7 +974,12 @@ async function verificarVersaoDoApp() {
 	if (maisNova > instalada) mostrarAvisoDeVersao(maisNova)
 }
 
-function baixarApk() { location.href = LINK_APK }
+// Cada versão tem o arquivo com nome próprio (colecao-tcg-1.3.apk), para não esbarrar em
+// um download antigo com o mesmo nome. Sem saber a versão, usa o link "sempre o mais novo".
+const linkApk = versao => versao
+	? `https://github.com/Ticos1/projeto-cartas/releases/download/v1.${versao}/colecao-tcg-1.${versao}.apk`
+	: LINK_APK
+function baixarApk(versao) { location.href = linkApk(versao) }
 
 function mostrarAvisoDeVersao(versao) {
 	if ($('#aviso-versao')) return
@@ -982,7 +987,7 @@ function mostrarAvisoDeVersao(versao) {
 	aviso.id = 'aviso-versao'
 	aviso.className = 'convite novidade'
 	aviso.innerHTML = `<span aria-hidden="true">📲</span><span><b>Nova versão do app (1.${versao}).</b> Toque para baixar e instalar.</span>`
-	aviso.addEventListener('click', baixarApk)
+	aviso.addEventListener('click', () => baixarApk(versao))
 	document.body.insertBefore(aviso, tela)
 }
 
@@ -995,7 +1000,7 @@ function configurarSecaoApk() {
 	if (!instalada) {
 		texto.textContent = 'Você está usando pelo navegador. Para ter o app instalado no Android, baixe o APK.'
 		botao.textContent = 'Baixar app Android'
-		botao.onclick = baixarApk
+		botao.onclick = () => baixarApk()
 		return
 	}
 	texto.textContent = `Versão instalada: 1.${instalada}`
@@ -1010,7 +1015,7 @@ function configurarSecaoApk() {
 		} else if (maisNova > instalada) {
 			texto.textContent = `Versão instalada: 1.${instalada}. Nova versão disponível: 1.${maisNova}.`
 			botao.textContent = `Baixar versão 1.${maisNova}`
-			botao.onclick = baixarApk
+			botao.onclick = () => baixarApk(maisNova)
 			mostrarAvisoDeVersao(maisNova)
 		} else {
 			texto.textContent = `Versão instalada: 1.${instalada}. Você já está na versão mais nova.`
