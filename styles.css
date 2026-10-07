@@ -604,26 +604,39 @@ main {
 	background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, .8) 50%, transparent 58%);
 }
 
-.ef-ativo .ef-halo { animation: ef-halo-entra .7s ease-out forwards; }
-.ef-ativo.ef-pulso .ef-halo { animation: ef-halo-entra .7s ease-out forwards, ef-pulso 2.2s ease-in-out .7s infinite; }
-.ef-ativo.ef-com-holo .ef-holo { animation: ef-holo-passa 3.2s ease-in-out forwards; }
-.ef-ativo .ef-brilho { animation: ef-brilho-passa .95s ease-in-out .1s var(--ef-brilhos, 0); }
+.ef-ativo .ef-halo { animation: ef-halo-passa 1.9s ease-out; }
+.ef-ativo.ef-pulso .ef-halo { animation: ef-halo-pulsa 2.3s ease-in-out; }
+.ef-ativo.ef-com-holo .ef-holo { animation: ef-holo-passa 2.1s ease-in-out; }
+.ef-ativo .ef-brilho { animation: ef-brilho-passa .75s ease-in-out .05s var(--ef-brilhos, 0); }
 
-@keyframes ef-halo-entra { from { opacity: 0; transform: scale(.94); } to { opacity: .85; transform: none; } }
-@keyframes ef-pulso { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+/* Tudo começa e termina sozinho: depois da entrada a carta fica limpa. */
+@keyframes ef-halo-passa {
+	0% { opacity: 0; transform: scale(.94); }
+	25% { opacity: .85; transform: none; }
+	100% { opacity: 0; transform: none; }
+}
+@keyframes ef-halo-pulsa {
+	0% { opacity: 0; transform: scale(.94); }
+	18% { opacity: .9; transform: none; }
+	38% { opacity: .5; }
+	58% { opacity: .95; }
+	78% { opacity: .5; }
+	100% { opacity: 0; transform: none; }
+}
 @keyframes ef-holo-passa {
 	0% { opacity: 0; background-position: 0% 30%; }
-	22% { opacity: .55; }
-	100% { opacity: .22; background-position: 100% 70%; }
+	25% { opacity: .55; }
+	100% { opacity: 0; background-position: 100% 70%; }
 }
 @keyframes ef-brilho-passa {
 	from { transform: translateX(-70%); opacity: 1; }
 	to { transform: translateX(70%); opacity: 1; }
 }
 
-/* Quem pediu menos movimento no celular: só um brilho parado em volta da carta */
+/* Quem pediu menos movimento no celular: só um clarão rápido em volta da carta, sem movimento */
 @media (prefers-reduced-motion: reduce) {
-	.ef-ativo .ef-halo, .ef-ativo.ef-pulso .ef-halo { animation: none; opacity: .7; }
+	.ef-ativo .ef-halo, .ef-ativo.ef-pulso .ef-halo { animation: ef-halo-curto 1.6s ease-out; }
 	.ef-holo, .ef-brilho { display: none; }
 	#zoom-particulas { display: none; }
 }
+@keyframes ef-halo-curto { 0% { opacity: 0; } 20% { opacity: .7; } 100% { opacity: 0; } }

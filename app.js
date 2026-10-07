@@ -10,7 +10,7 @@ const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v18'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v20'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -450,6 +450,9 @@ function iniciarEfeitos(raridade, parado = false) {
 	if (config.holo) caixa.classList.add('ef-com-holo')
 	if (config.holo === 'ouro') caixa.classList.add('ef-holo-ouro')
 	if (config.pulso) caixa.classList.add('ef-pulso')
+	// Os efeitos duram poucos segundos; depois a carta fica limpa.
+	const meu = idEfeito
+	setTimeout(() => { if (meu === idEfeito) pararEfeitos() }, 2900)
 	if (parado) return
 	if (config.flash) $('#zoom').animate([{ backgroundColor: config.flash }, { backgroundColor: 'rgba(0,0,0,.8)' }], { duration: 650, easing: 'ease-out' })
 	if (config.particulas) dispararParticulas(config.particulas, caixa)
@@ -473,17 +476,17 @@ function dispararParticulas(config, caixa) {
 
 	for (let i = 0; i < config.n; i++) {   // faíscas: saem das bordas da carta, para fora
 		const ang = Math.random() * Math.PI * 2, v = sorte(90, 300)
-		ps.push({ t: 'faisca', idade: 0, vida: sorte(.9, 1.9), r: sorte(1.4, 3.4), cor: cor(), g: 160,
+		ps.push({ t: 'faisca', idade: 0, vida: sorte(.8, 1.6), r: sorte(1.4, 3.4), cor: cor(), g: 160,
 			x: cx + Math.cos(ang) * r.width * sorte(.35, .52), y: cy + Math.sin(ang) * r.height * sorte(.35, .52),
 			vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - 30 })
 	}
 	for (let i = 0; i < (config.estrelas || 0); i++) {   // estrelinhas que brilham e sobem
-		ps.push({ t: 'estrela', idade: 0, vida: sorte(1.2, 2.4), r: sorte(6, 14), cor: cor(), atraso: sorte(0, .7),
+		ps.push({ t: 'estrela', idade: 0, vida: sorte(1, 1.8), r: sorte(6, 14), cor: cor(), atraso: sorte(0, .5),
 			x: cx + sorte(-.55, .55) * r.width, y: cy + sorte(-.55, .55) * r.height, vx: sorte(-14, 14), vy: sorte(-34, -8) })
 	}
 	if (config.chuva) {   // confete caindo do topo da tela
 		for (let i = 0; i < 40; i++) {
-			ps.push({ t: 'confete', idade: 0, vida: sorte(2.2, 3.4), r: sorte(3, 6), cor: cor(), atraso: sorte(0, .8),
+			ps.push({ t: 'confete', idade: 0, vida: sorte(1.4, 2), r: sorte(3, 6), cor: cor(), atraso: sorte(0, .4),
 				x: sorte(0, largura), y: sorte(-altura * .3, -10), vx: sorte(-30, 30), vy: sorte(140, 300),
 				giro: sorte(0, 6.28), vgiro: sorte(-6, 6) })
 		}
@@ -493,7 +496,7 @@ function dispararParticulas(config, caixa) {
 			const x = cx + sorte(-.62, .62) * r.width, y = cy + sorte(-.6, .6) * r.height, tam = sorte(18, 42)
 			const pontos = [[0, 0]]
 			for (let k = 1; k <= 5; k++) pontos.push([sorte(-.35, .35) * tam, k * tam / 5])
-			ps.push({ t: 'raio', idade: 0, vida: sorte(.12, .22), atraso: sorte(0, 1.4), cor: cor(), x, y, pontos })
+			ps.push({ t: 'raio', idade: 0, vida: sorte(.12, .22), atraso: sorte(0, 1.1), cor: cor(), x, y, pontos })
 		}
 	}
 

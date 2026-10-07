@@ -131,5 +131,6 @@ celulares pegarem a versão nova.
 
 Quando a carta termina de girar e para de frente, ela solta efeitos conforme a raridade
 (`EFEITOS_RARIDADE` em `app.js`): brilho que passa, halo colorido, reflexo holográfico e
-partículas. Comum não tem efeito. Para mudar ou criar um efeito, edite essa tabela.
-Quem desligou as animações no celular vê só um halo parado.
+partículas. Comum não tem efeito. Os efeitos aparecem só na entrada da carta (cerca de 2 segundos)
+e depois somem, deixando a carta limpa. Para mudar ou criar um efeito, edite essa tabela.
+Quem desligou as animações no celular vê só um clarão rápido, sem movimento.
