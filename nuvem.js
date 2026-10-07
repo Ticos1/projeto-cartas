@@ -66,7 +66,7 @@ function juntar(a = {}, b = {}) {
 	return resultado
 }
 
-// opcoes: { colecaoLocal(), aoMudarUsuario(usuario), aoReceberColecao(cartas), aoMudarStatus(status) }
+// opcoes: { colecaoLocal(), aoMudarUsuario(usuario), aoReceberColecao(cartas, semMasterSet), aoMudarStatus(status) }
 // status: 'desconectado' | 'sincronizando' | 'sincronizado' | 'offline'
 export function iniciarNuvem(opcoes) {
 	avisos = opcoes
@@ -88,7 +88,8 @@ export function iniciarNuvem(opcoes) {
 			try {
 				const atual = await dbSdk.getDoc(documento)
 				const unido = juntar(atual.data()?.cartas, opcoes.colecaoLocal())
-				await dbSdk.setDoc(documento, { cartas: unido, atualizadoEm: dbSdk.serverTimestamp() })
+				const semMaster = [...new Set([...(atual.data()?.semMasterSet || []), ...(opcoes.semMasterSetLocal?.() || [])])]
+				await dbSdk.setDoc(documento, { cartas: unido, semMasterSet: semMaster, atualizadoEm: dbSdk.serverTimestamp() }, { merge: true })
 				try { localStorage.setItem(chaveJuntou, '1') } catch { /* sem localStorage */ }
 			} catch (erro) {
 				console.warn('Não foi possível juntar com a nuvem agora:', erro)
@@ -96,7 +97,7 @@ export function iniciarNuvem(opcoes) {
 		}
 
 		pararDeOuvir = dbSdk.onSnapshot(documento, { includeMetadataChanges: true }, foto => {
-			if (foto.exists()) avisos.aoReceberColecao(foto.data().cartas || {})
+			if (foto.exists()) avisos.aoReceberColecao(foto.data().cartas || {}, foto.data().semMasterSet || [])
 			const pendente = foto.metadata.hasPendingWrites
 			avisos.aoMudarStatus(pendente ? 'sincronizando' : foto.metadata.fromCache ? 'offline' : 'sincronizado')
 		}, erro => {
@@ -128,6 +129,15 @@ export function marcarNaNuvem(setId, numero, tem) {
 // Usado ao importar um backup: troca a coleção inteira.
 export function substituirNaNuvem(cartas) {
 	if (!documento) return
-	dbSdk.setDoc(documento, { cartas, atualizadoEm: dbSdk.serverTimestamp() })
+	dbSdk.setDoc(documento, { cartas, atualizadoEm: dbSdk.serverTimestamp() }, { mergeFields: ['cartas', 'atualizadoEm'] })
+		.catch(erro => console.warn('Falha ao salvar na nuvem:', erro))
+}
+
+// Liga/desliga o master set de um set. Guardamos a lista dos sets com master set DESLIGADO
+// (o padrão é ligado), para valer igual no celular e no PC.
+export function masterSetNaNuvem(setId, ativo) {
+	if (!documento) return
+	const operacao = ativo ? dbSdk.arrayRemove(setId) : dbSdk.arrayUnion(setId)
+	dbSdk.setDoc(documento, { semMasterSet: operacao }, { merge: true })
 		.catch(erro => console.warn('Falha ao salvar na nuvem:', erro))
 }

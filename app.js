@@ -8,6 +8,7 @@
 
 const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_TEMA = 'colecao-tcg-tema'
+const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const IMAGENS = 'https://assets.tcgdex.net'
 
 let dados = null              // conteúdo de data/cartas.json
@@ -65,10 +66,43 @@ function alternar(setId, numero) {
 	return numeros.has(numero)
 }
 
+/* ---------- Master set ---------- */
+// Master set = todas as cartas do set, incluindo as especiais (secretas, numeradas acima
+// do total oficial, ex.: 133/132). Vem ligado por padrão; a lista guarda os sets DESLIGADOS.
+let semMasterSet = new Set()
+try { semMasterSet = new Set(JSON.parse(ler(CHAVE_SEM_MASTER) || '[]')) } catch { /* padrão: todos ligados */ }
+
+function cartaNormal(set, carta) {
+	return /^\d+$/.test(carta.n) && parseInt(carta.n, 10) <= set.oficiais
+}
+
+// Só mostra o botão de master set quando o set tem cartas normais e especiais.
+function temCartasEspeciais(set) {
+	return set.oficiais > 0 && set.cartas.some(c => !cartaNormal(set, c))
+}
+
+function masterSetLigado(set) {
+	return !semMasterSet.has(set.id)
+}
+
+// Cartas que contam para o set, conforme o master set está ligado ou não.
+function cartasDoSet(set) {
+	if (masterSetLigado(set) || !temCartasEspeciais(set)) return set.cartas
+	return set.cartas.filter(c => cartaNormal(set, c))
+}
+
+function definirMasterSet(set, ligado) {
+	if (ligado) semMasterSet.delete(set.id)
+	else semMasterSet.add(set.id)
+	gravar(CHAVE_SEM_MASTER, JSON.stringify([...semMasterSet]))
+	nuvem?.masterSetNaNuvem(set.id, ligado)
+}
+
 function progresso(set) {
 	const numeros = colecao[set.id]
-	const tem = numeros ? set.cartas.filter(c => numeros.has(c.n)).length : 0
-	return { tem, total: set.cartas.length, pct: Math.floor((tem / set.cartas.length) * 100) }
+	const cartas = cartasDoSet(set)
+	const tem = numeros ? cartas.filter(c => numeros.has(c.n)).length : 0
+	return { tem, total: cartas.length, pct: Math.floor((tem / cartas.length) * 100) }
 }
 
 /* ---------- Imagens ---------- */
@@ -301,7 +335,7 @@ function desenharInicio() {
 	if (busca) {
 		const itens = []
 		for (const set of dados.sets) {
-			for (const carta of set.cartas) if (combina(carta, busca)) itens.push({ set, carta })
+			for (const carta of cartasDoSet(set)) if (combina(carta, busca)) itens.push({ set, carta })
 		}
 		conteudo.innerHTML = itens.length
 			? `<h2 class="titulo-secao">${itens.length} carta${itens.length > 1 ? 's' : ''} encontrada${itens.length > 1 ? 's' : ''}</h2>`
@@ -317,7 +351,7 @@ function desenharInicio() {
 				<span class="logo-set"><img alt="" data-logo="${escapar(set.id)}"><span hidden>${escapar(set.sigla || set.id)}</span></span>
 				<span class="item-set-info">
 					<b>${escapar(set.nome)}</b>
-					<small>${p.tem} de ${p.total} · ${dataBr(set.lancamento)}</small>
+					<small>${p.tem} de ${p.total}${temCartasEspeciais(set) && !masterSetLigado(set) ? ' · sem especiais' : ''} · ${dataBr(set.lancamento)}</small>
 					${barraHtml(p)}
 				</span>
 				<span class="pct${p.pct === 100 ? ' completa' : ''}">${p.pct}%</span>
@@ -345,6 +379,14 @@ function telaSet(setId) {
 	tela.innerHTML = `
 		<section class="resumo" id="resumo-set"></section>
 		<input class="busca" id="busca" type="search" placeholder="Buscar por nome ou número" value="${escapar(busca)}" autocomplete="off" enterkeyhint="search">
+		${temCartasEspeciais(set) ? `
+		<button class="opcao-master" id="master-set" role="switch">
+			<span class="opcao-texto">
+				<b>Master set</b>
+				<small id="master-set-dica"></small>
+			</span>
+			<span class="chave" aria-hidden="true"></span>
+		</button>` : ''}
 		<div class="segmentos" id="filtro">
 			<button data-filtro="todas">Todas</button>
 			<button data-filtro="faltam">Faltam</button>
@@ -358,6 +400,12 @@ function telaSet(setId) {
 	campo.addEventListener('input', () => {
 		buscas[set.id] = campo.value
 		desenharGradeSet(set)
+	})
+
+	$('#master-set')?.addEventListener('click', () => {
+		definirMasterSet(set, !masterSetLigado(set))
+		desenharGradeSet(set)
+		atualizarProgressoNaTela()
 	})
 
 	$('#filtro').addEventListener('click', evento => {
@@ -377,7 +425,17 @@ function desenharGradeSet(set) {
 	}
 
 	const busca = semAcento((buscas[set.id] || '').trim())
-	const itens = set.cartas
+	const master = $('#master-set')
+	if (master) {
+		const ligado = masterSetLigado(set)
+		const normais = set.cartas.filter(c => cartaNormal(set, c)).length
+		master.setAttribute('aria-checked', ligado)
+		$('#master-set-dica').textContent = ligado
+			? `Todas as ${set.cartas.length} cartas, com as ${set.cartas.length - normais} especiais`
+			: `Só as ${normais} cartas da numeração normal`
+	}
+
+	const itens = cartasDoSet(set)
 		.filter(carta => {
 			if (filtro === 'faltam' && tenho(set.id, carta.n)) return false
 			if (filtro === 'tenho' && !tenho(set.id, carta.n)) return false
@@ -574,7 +632,14 @@ function mostrarUsuario(novo) {
 }
 
 // Chegou a coleção da nuvem (de outro aparelho, ou a junção do primeiro login).
-function receberColecao(cartas) {
+function receberColecao(cartas, semMaster = []) {
+	const mudouMaster = semMaster.length !== semMasterSet.size || semMaster.some(id => !semMasterSet.has(id))
+	if (mudouMaster) {
+		semMasterSet = new Set(semMaster)
+		gravar(CHAVE_SEM_MASTER, JSON.stringify(semMaster))
+		const { setId } = rotaAtual()
+		if (setId) desenharGradeSet(dados.sets.find(s => s.id === setId))
+	}
 	colecao = {}
 	for (const [set, numeros] of Object.entries(cartas)) colecao[set] = new Set(numeros)
 	salvarColecao()
@@ -596,6 +661,7 @@ async function carregarNuvem() {
 	}
 	nuvem.iniciarNuvem({
 		colecaoLocal: colecaoComoObjeto,
+		semMasterSetLocal: () => [...semMasterSet],
 		aoMudarUsuario: mostrarUsuario,
 		aoReceberColecao: receberColecao,
 		aoMudarStatus: mostrarStatus,
