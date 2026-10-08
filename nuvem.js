@@ -88,9 +88,10 @@ export function iniciarNuvem(opcoes) {
 			try {
 				const atual = await dbSdk.getDoc(documento)
 				const unido = juntar(atual.data()?.cartas, opcoes.colecaoLocal())
+					const escondidasUnidas = [...new Set([...(atual.data()?.colecoesEscondidas || []), ...(opcoes.escondidasLocal?.() || [])])]
 					const desejosUnidos = juntar(atual.data()?.desejos, opcoes.desejosLocal?.())
 				const semMaster = [...new Set([...(atual.data()?.semMasterSet || []), ...(opcoes.semMasterSetLocal?.() || [])])]
-				await dbSdk.setDoc(documento, { cartas: unido, desejos: desejosUnidos, semMasterSet: semMaster, atualizadoEm: dbSdk.serverTimestamp() }, { merge: true })
+				await dbSdk.setDoc(documento, { cartas: unido, desejos: desejosUnidos, colecoesEscondidas: escondidasUnidas, semMasterSet: semMaster, atualizadoEm: dbSdk.serverTimestamp() }, { merge: true })
 				try { localStorage.setItem(chaveJuntou, '1') } catch { /* sem localStorage */ }
 			} catch (erro) {
 				console.warn('Não foi possível juntar com a nuvem agora:', erro)
@@ -98,7 +99,7 @@ export function iniciarNuvem(opcoes) {
 		}
 
 		pararDeOuvir = dbSdk.onSnapshot(documento, { includeMetadataChanges: true }, foto => {
-			if (foto.exists()) avisos.aoReceberColecao(foto.data().cartas || {}, foto.data().semMasterSet || [], foto.data().desejos || {})
+			if (foto.exists()) avisos.aoReceberColecao(foto.data().cartas || {}, foto.data().semMasterSet || [], foto.data().desejos || {}, foto.data().colecoesEscondidas || [])
 			const pendente = foto.metadata.hasPendingWrites
 			avisos.aoMudarStatus(pendente ? 'sincronizando' : foto.metadata.fromCache ? 'offline' : 'sincronizado')
 		}, erro => {
@@ -150,5 +151,13 @@ export function marcarDesejoNaNuvem(setId, numero, quer) {
 	if (!documento) return
 	const operacao = quer ? dbSdk.arrayUnion(numero) : dbSdk.arrayRemove(numero)
 	dbSdk.setDoc(documento, { desejos: { [setId]: operacao }, atualizadoEm: dbSdk.serverTimestamp() }, { merge: true })
+		.catch(erro => console.warn('Falha ao salvar na nuvem:', erro))
+}
+
+// Coleções escondidas (as que o usuário não coleciona): lista de ids do set.
+export function escondidasNaNuvem(ids, esconder) {
+	if (!documento || !ids.length) return
+	const operacao = esconder ? dbSdk.arrayUnion(...ids) : dbSdk.arrayRemove(...ids)
+	dbSdk.setDoc(documento, { colecoesEscondidas: operacao }, { merge: true })
 		.catch(erro => console.warn('Falha ao salvar na nuvem:', erro))
 }

@@ -167,3 +167,6 @@ Aba **Configurações** (☰ ou ⋮ → "Temas, modo claro/escuro e logs").
 ## Séries incluídas
 **Megaevolução** (9 coleções), **Escarlate e Violeta** (19) e **Espada e Escudo** (26): 54 coleções e cerca de 8.600 cartas. Na aba Coleções e no filtro de coleção elas aparecem agrupadas por série.
 Nas séries Escarlate e Violeta e Espada e Escudo o site guarda só a imagem pequena de cada carta (para caber no limite do GitHub Pages); a imagem grande, ao segurar a carta, vem direto do TCGdex e precisa de internet na primeira vez.
+
+## Escolher quais coleções aparecem
+Em **Coleções**, o botão **Escolher coleções** abre uma lista com um interruptor para cada coleção (e "Todas / Nenhuma" por série). As desligadas somem de Coleções, da Pesquisa e dos filtros; o que já foi marcado continua salvo e a Lista de Desejos não muda. A escolha fica salva no aparelho e sincroniza pela conta (campo `colecoesEscondidas`).

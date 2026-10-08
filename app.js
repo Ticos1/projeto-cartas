@@ -8,6 +8,7 @@
 
 const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_DESEJOS = 'colecao-tcg-desejos'
+const CHAVE_ESCONDIDAS = 'colecao-tcg-colecoes-escondidas'
 const CHAVE_LIGA_ABERTAS = 'colecao-tcg-liga-abertas'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
@@ -15,7 +16,7 @@ const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v31'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v32'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -130,6 +131,21 @@ function alternar(setId, numero) {
 // do total oficial, ex.: 133/132). Vem ligado por padrão; a lista guarda os sets DESLIGADOS.
 let semMasterSet = new Set()
 try { semMasterSet = new Set(JSON.parse(ler(CHAVE_SEM_MASTER) || '[]')) } catch { /* padrão: todos ligados */ }
+
+/* ---------- Coleções escondidas ---------- */
+// O usuário escolhe quais coleções acompanha. As escondidas somem de Coleções, da Pesquisa e dos filtros
+// (a lista de desejos continua mostrando as cartas que ele desejou). O que já foi marcado não se perde.
+let escondidas = new Set()
+try { escondidas = new Set(JSON.parse(ler(CHAVE_ESCONDIDAS) || '[]')) } catch { /* todas visíveis */ }
+const colecaoVisivel = set => !escondidas.has(set.id)
+const setsVisiveis = () => dados.sets.filter(colecaoVisivel)
+
+function definirEscondidas(ids, esconder) {
+	for (const id of ids) { if (esconder) escondidas.add(id); else escondidas.delete(id) }
+	gravar(CHAVE_ESCONDIDAS, JSON.stringify([...escondidas]))
+	nuvem?.escondidasNaNuvem(ids, esconder)
+	if (pesquisa.set && escondidas.has(pesquisa.set)) pesquisa.set = ''
+}
 
 function cartaNormal(set, carta) {
 	return /^\d+$/.test(carta.n) && parseInt(carta.n, 10) <= set.oficiais
@@ -743,17 +759,46 @@ $('#zoom').addEventListener('contextmenu', evento => evento.preventDefault())
 
 /* ---------- Tela: início (lista de sets) ---------- */
 /* ---------- Aba: Coleções (lista de sets) ---------- */
-function telaColecoes() {
-	definirTopo('Coleções', `${dados.sets.length} coleções`, false)
+let editandoColecoes = false
 
+function telaColecoes() {
+	editandoColecoes = false
 	tela.innerHTML = `
 		${htmlConvite()}
 		<section class="resumo" id="resumo"></section>
+		<button class="botao secundario" id="editar-colecoes"></button>
 		<div id="conteudo"></div>`
 
-	atualizarResumo()
 	ligarConvite()
+	$('#editar-colecoes').addEventListener('click', () => {
+		editandoColecoes = !editandoColecoes
+		desenharColecoes()
+		if (!editandoColecoes) window.scrollTo(0, 0)
+	})
+	$('#conteudo').addEventListener('change', evento => {
+		const caixa = evento.target.closest('input[data-escolher]')
+		if (!caixa) return
+		definirEscondidas([caixa.dataset.escolher], !caixa.checked)
+		caixa.closest('.item-escolha').classList.toggle('escondida', !caixa.checked)
+		atualizarContagemDasSeries()
+	})
+	$('#conteudo').addEventListener('click', evento => {
+		const botao = evento.target.closest('button[data-serie]')
+		if (!botao) return
+		const ids = dados.sets.filter(set => set.serie === botao.dataset.serie).map(set => set.id)
+		definirEscondidas(ids, botao.dataset.acao === 'nenhuma')
+		desenharColecoes()
+	})
 	desenharColecoes()
+}
+
+// Na hora de escolher, mostra quantas coleções de cada série estão visíveis.
+function atualizarContagemDasSeries() {
+	for (const serie of dados.series) {
+		const sets = dados.sets.filter(set => set.serie === serie.id)
+		const el = document.querySelector(`[data-contagem-serie="${serie.id}"]`)
+		if (el) el.textContent = `${sets.filter(colecaoVisivel).length} de ${sets.length} coleções escolhidas`
+	}
 }
 
 // Convite para entrar na conta (some quando já está conectado).
@@ -768,12 +813,12 @@ function ligarConvite() { $('#convite').addEventListener('click', abrirMenu) }
 
 function atualizarResumo() {
 	let tem = 0, total = 0
-	for (const set of dados.sets) {
+	for (const set of setsVisiveis()) {
 		const p = progresso(set)
 		tem += p.tem
 		total += p.total
 	}
-	const geral = { tem, total, pct: Math.floor((tem / total) * 100) }
+	const geral = { tem, total, pct: total ? Math.floor((tem / total) * 100) : 0 }
 	$('#resumo').innerHTML = `
 		<div class="resumo-linha"><strong>${geral.pct}%</strong><span>${tem} de ${total} cartas</span></div>
 		${barraHtml(geral)}`
@@ -794,12 +839,34 @@ function desenharColecoes() {
 				<span class="pct${p.pct === 100 ? ' completa' : ''}">${p.pct}%</span>
 			</a></li>`
 	}
-	conteudo.innerHTML = dados.series.map(serie => {
-		const sets = dados.sets.filter(set => set.serie === serie.id)
-		const soma = sets.reduce((t, set) => { const p = progresso(set); return { tem: t.tem + p.tem, total: t.total + p.total } }, { tem: 0, total: 0 })
-		return `<h2 class="titulo-serie">${escapar(serie.nome)}<small>${soma.tem} de ${soma.total} cartas · ${sets.length} coleções</small></h2>
-			<ul class="lista-sets">${sets.map(itemDoSet).join('')}</ul>`
-	}).join('')
+	const itemDeEscolha = set => `
+		<li><label class="item-set item-escolha${colecaoVisivel(set) ? '' : ' escondida'}">
+			<span class="logo-set"><img alt="" data-logo="${escapar(set.id)}"><span hidden>${escapar(set.sigla || set.id)}</span></span>
+			<span class="item-set-info"><b>${escapar(set.nome)}</b><small>${set.cartas.length} cartas · ${dataBr(set.lancamento)}</small></span>
+			<input type="checkbox" class="interruptor" data-escolher="${escapar(set.id)}" ${colecaoVisivel(set) ? 'checked' : ''} aria-label="Acompanhar ${escapar(set.nome)}">
+		</label></li>`
+
+	$('#editar-colecoes').textContent = editandoColecoes ? '✓ Concluir' : 'Escolher coleções'
+	$('#editar-colecoes').classList.toggle('secundario', !editandoColecoes)
+	definirTopo('Coleções', editandoColecoes ? 'Escolha o que você coleciona' : `${setsVisiveis().length} de ${dados.sets.length} coleções`, false)
+	atualizarResumo()
+
+	if (editandoColecoes) {
+		conteudo.innerHTML = `<p class="dica">Ligue só as coleções que você coleciona. As desligadas somem do app (da lista, da pesquisa e dos filtros), e o que você já marcou continua salvo.</p>` +
+			dados.series.map(serie => {
+				const sets = dados.sets.filter(set => set.serie === serie.id)
+				return `<h2 class="titulo-serie linha-serie"><span>${escapar(serie.nome)}<small data-contagem-serie="${escapar(serie.id)}">${sets.filter(colecaoVisivel).length} de ${sets.length} coleções escolhidas</small></span>
+					<span class="serie-acoes"><button data-serie="${escapar(serie.id)}" data-acao="todas">Todas</button><button data-serie="${escapar(serie.id)}" data-acao="nenhuma">Nenhuma</button></span></h2>
+					<ul class="lista-sets">${sets.map(itemDeEscolha).join('')}</ul>`
+			}).join('')
+	} else {
+		const series = dados.series.map(serie => ({ serie, sets: setsVisiveis().filter(set => set.serie === serie.id) })).filter(g => g.sets.length)
+		conteudo.innerHTML = series.length ? series.map(({ serie, sets }) => {
+			const soma = sets.reduce((t, set) => { const p = progresso(set); return { tem: t.tem + p.tem, total: t.total + p.total } }, { tem: 0, total: 0 })
+			return `<h2 class="titulo-serie">${escapar(serie.nome)}<small>${soma.tem} de ${soma.total} cartas · ${sets.length} coleç${sets.length > 1 ? 'ões' : 'ão'}</small></h2>
+				<ul class="lista-sets">${sets.map(itemDoSet).join('')}</ul>`
+		}).join('') : '<p class="vazio">Nenhuma coleção escolhida. Toque em <b>Escolher coleções</b> para ligar as que você coleciona.</p>'
+	}
 
 	// Logo do set; se não houver, fica a sigla em texto.
 	for (const img of conteudo.querySelectorAll('img[data-logo]')) {
@@ -988,9 +1055,9 @@ $('#escolha').addEventListener('click', evento => {
 // soDesejadas: nas contagens, só conta as cartas da lista de desejos.
 function abrirEscolhaSet(estado = pesquisa, aoMudar = desenharPesquisa, soDesejadas = false) {
 	const contar = set => cartasDoSet(set).filter(c => !soDesejadas || desejada(set.id, c.n)).length
-	const opcoes = [{ valor: '', icone: htmlIconeSet(null), rotulo: 'Todos os sets', detalhe: `${dados.sets.length} coleções` },
+	const opcoes = [{ valor: '', icone: htmlIconeSet(null), rotulo: 'Todos os sets', detalhe: `${soDesejadas ? dados.sets.length : setsVisiveis().length} coleções` },
 		...dados.series.flatMap(serie => [{ cabecalho: serie.nome },
-			...dados.sets.filter(set => set.serie === serie.id).map(set => ({ valor: set.id, icone: htmlIconeSet(set), rotulo: set.nome, detalhe: `${contar(set)} cartas` }))])]
+			...(soDesejadas ? dados.sets : setsVisiveis()).filter(set => set.serie === serie.id).map(set => ({ valor: set.id, icone: htmlIconeSet(set), rotulo: set.nome, detalhe: `${contar(set)} cartas` }))])]
 	abrirEscolha('Coleção', opcoes, estado.set, valor => {
 		estado.set = valor
 		estado.limite = PASSO_PESQUISA
@@ -1002,7 +1069,7 @@ function abrirEscolhaSet(estado = pesquisa, aoMudar = desenharPesquisa, soDeseja
 function abrirEscolhaRaridade(estado = pesquisa, aoMudar = desenharPesquisa, soDesejadas = false) {
 	// Quantas cartas de cada raridade existem (na coleção escolhida, se houver uma).
 	const contagem = {}
-	for (const set of dados.sets) {
+	for (const set of soDesejadas ? dados.sets : setsVisiveis()) {
 		if (estado.set && set.id !== estado.set) continue
 		for (const carta of cartasDoSet(set)) if (carta.raridade && (!soDesejadas || desejada(set.id, carta.n))) contagem[carta.raridade] = (contagem[carta.raridade] || 0) + 1
 	}
@@ -1182,7 +1249,7 @@ function desenharPesquisa() {
 	}
 
 	const itens = []
-	for (const set of dados.sets) {
+	for (const set of setsVisiveis()) {
 		if (pesquisa.set && set.id !== pesquisa.set) continue
 		for (const carta of cartasDoSet(set)) {
 			if (pesquisa.raridade && carta.raridade !== pesquisa.raridade) continue
@@ -1870,7 +1937,10 @@ function mostrarUsuario(novo) {
 }
 
 // Chegou a coleção da nuvem (de outro aparelho, ou a junção do primeiro login).
-function receberColecao(cartas, semMaster = [], desejosNuvem = {}) {
+function receberColecao(cartas, semMaster = [], desejosNuvem = {}, escondidasNuvem = []) {
+	escondidas = new Set(escondidasNuvem)
+	gravar(CHAVE_ESCONDIDAS, JSON.stringify(escondidasNuvem))
+	if (pesquisa.set && escondidas.has(pesquisa.set)) pesquisa.set = ''
 	desejos = {}
 	for (const [set, numeros] of Object.entries(desejosNuvem)) desejos[set] = new Set(numeros)
 	salvarDesejos()
@@ -1888,7 +1958,7 @@ function receberColecao(cartas, semMaster = [], desejosNuvem = {}) {
 	for (const botao of document.querySelectorAll('.carta')) atualizarCarta(botao)
 	if (!$('#zoom').hidden && cartaAberta) atualizarBotaoZoom()
 	const { aba, setId, sub } = rotaAtual()
-	if (!setId) { if (aba === 'colecoes') desenharColecoes(); else if (aba === 'desejos') sub === 'comprar' ? desenharComprarNaLiga() : desenharDesejos(); else if (aba === 'pesquisa') desenharPesquisa() }
+	if (!setId) { if (aba === 'colecoes') { if (!editandoColecoes) desenharColecoes(); else atualizarContagemDasSeries() } else if (aba === 'desejos') sub === 'comprar' ? desenharComprarNaLiga() : desenharDesejos(); else if (aba === 'pesquisa') desenharPesquisa() }
 	atualizarProgressoNaTela()
 }
 
@@ -1905,6 +1975,7 @@ async function carregarNuvem() {
 		colecaoLocal: colecaoComoObjeto,
 		semMasterSetLocal: () => [...semMasterSet],
 		desejosLocal: desejosComoObjeto,
+		escondidasLocal: () => [...escondidas],
 		aoMudarUsuario: mostrarUsuario,
 		aoReceberColecao: receberColecao,
 		aoMudarStatus: mostrarStatus,
