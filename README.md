@@ -76,7 +76,7 @@ git clone --depth 1 https://github.com/tcgdex/cards-database ../cards-database
 node scripts/gerar_dados.mjs ../cards-database
 ```
 
-Para mudar os sets, edite a lista `SETS` no começo de `scripts/gerar_dados.mjs`.
+Para mudar os sets, edite a lista `SERIES` no começo de `scripts/gerar_dados.mjs`.
 Depois de mudar qualquer arquivo do app, aumente `VERSAO` em `sw.js` para os
 celulares pegarem a versão nova.
 
@@ -163,3 +163,7 @@ Aba **Configurações** (☰ ou ⋮ → "Temas, modo claro/escuro e logs").
 - A aba **Lista de Desejos** (☰) mostra essas cartas, com filtro de coleção e de raridade. Cartas da lista ganham uma estrelinha amarela na grade.
 - A lista fica salva no aparelho e sincroniza pela conta (campo `desejos` do documento no Firestore) e entra no backup.
 - **Comprar na Liga**: na Lista de Desejos, o botão "Comprar na Liga Pokémon" abre uma lista das cartas desejadas que você ainda não tem (respeitando os filtros). "Abrir próxima" abre a carta na Liga, onde você filtra NM e uma loja do seu estado; o app marca quais já foram abertas e mostra o progresso. (A Liga não permite montar o carrinho automaticamente.)
+
+## Séries incluídas
+**Megaevolução** (9 coleções), **Escarlate e Violeta** (19) e **Espada e Escudo** (26): 54 coleções e cerca de 8.600 cartas. Na aba Coleções e no filtro de coleção elas aparecem agrupadas por série.
+Nas séries Escarlate e Violeta e Espada e Escudo o site guarda só a imagem pequena de cada carta (para caber no limite do GitHub Pages); a imagem grande, ao segurar a carta, vem direto do TCGdex e precisa de internet na primeira vez.

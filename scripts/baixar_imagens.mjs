@@ -10,15 +10,15 @@ import path from 'node:path'
 const RAIZ = new URL('..', import.meta.url).pathname
 const dados = JSON.parse(fs.readFileSync(path.join(RAIZ, 'data/cartas.json'), 'utf8'))
 const BASE = 'https://assets.tcgdex.net'
-const SIMULTANEOS = 6
+const SIMULTANEOS = 10
 
 // Cada tarefa: um arquivo de destino e os endereços para tentar, em ordem.
 const tarefas = []
 for (const set of dados.sets) {
-	const origem = idioma => `${BASE}/${idioma}/${dados.serie}/${set.id}`
+	const origem = idioma => `${BASE}/${idioma}/${set.serie}/${set.id}`
 	tarefas.push({ set: set.id, tipo: 'logo', destino: `img/${set.id}/logo.webp`, urls: ['pt', 'en'].map(i => `${origem(i)}/logo.webp`) })
 	for (const carta of set.cartas) {
-		for (const qualidade of ['low', 'high']) {
+		for (const qualidade of set.altaOnline ? ['low'] : ['low', 'high']) {
 			tarefas.push({
 				set: set.id,
 				tipo: qualidade,

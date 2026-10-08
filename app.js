@@ -15,7 +15,7 @@ const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v30'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v31'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -166,12 +166,15 @@ function progresso(set) {
 
 /* ---------- Imagens ---------- */
 // Ordem: cópia publicada junto com o app (pasta img/) → TCGdex em português → TCGdex em inglês.
+// Sets "altaOnline" (séries antigas) não guardam a imagem grande no site: ela vem direto do TCGdex.
 function fontesImagem(setId, arquivo) {
-	return [
-		`img/${setId}/${arquivo}`,
-		`${IMAGENS}/pt/${dados.serie}/${setId}/${arquivo}`,
-		`${IMAGENS}/en/${dados.serie}/${setId}/${arquivo}`,
+	const set = dados.sets.find(s => s.id === setId)
+	const fontes = [
+		`${IMAGENS}/pt/${set?.serie}/${setId}/${arquivo}`,
+		`${IMAGENS}/en/${set?.serie}/${setId}/${arquivo}`,
 	]
+	if (set?.altaOnline && arquivo.endsWith('/high.webp')) return fontes
+	return [`img/${setId}/${arquivo}`, ...fontes]
 }
 
 // Tenta cada endereço até um funcionar; se nenhum funcionar, chama semImagem().
@@ -199,7 +202,7 @@ function semAcento(texto) {
 }
 
 function numeroExibido(set, carta) {
-	return set.oficiais && /^\d+$/.test(carta.n) ? `${carta.n}/${String(set.oficiais).padStart(3, '0')}` : carta.n
+	return set.oficiais && /^\d+$/.test(carta.n) ? `${carta.n.padStart(3, '0')}/${String(set.oficiais).padStart(3, '0')}` : carta.n
 }
 
 function dataBr(iso) {
@@ -485,6 +488,23 @@ const EFEITOS_RARIDADE = {
 	'Rara Futurista':          { brilho: 2, holo: true, halo: '#3cf0ff', pulso: true, particulas: { n: 40, estrelas: 10, cores: ['#d9fcff', '#3cf0ff', '#5a8cff'] } },
 	'Rara Pikachu':            { brilho: 2, halo: '#ffe14a', pulso: true, particulas: { n: 40, raios: true, cores: ['#fff7b0', '#ffe14a', '#ffb800'] } },
 	'Rara RGB':                { brilho: 2, holo: true, halo: '#ff5ea8', pulso: true, particulas: { n: 56, estrelas: 16, cores: ARCO } },
+	// Escarlate e Violeta / Espada e Escudo
+	'Rara Holo':               { brilho: 1, halo: '#c9d6ea', particulas: { n: 14, cores: ['#ffffff', '#c9d6ea'] } },
+	'Rara Holo V':             { brilho: 2, halo: '#5a9bff', particulas: { n: 30, cores: ['#d6e6ff', '#5a9bff', '#ffffff'] } },
+	'Rara Holo VMAX':          { brilho: 2, halo: '#ff4d4d', pulso: true, particulas: { n: 46, estrelas: 8, cores: ['#ffd6d6', '#ff4d4d', '#ff9d3c'] } },
+	'Rara Holo VSTAR':         { brilho: 2, halo: '#b48cff', pulso: true, particulas: { n: 46, estrelas: 12, cores: ['#eadcff', '#b48cff', '#ffffff'] } },
+	'Rara Radiante':           { brilho: 2, holo: true, halo: '#ff9ac8', pulso: true, particulas: { n: 40, estrelas: 10, cores: ARCO } },
+	'Rara Incrível':           { brilho: 2, holo: true, halo: '#7ee6ad', pulso: true, particulas: { n: 50, estrelas: 14, cores: ARCO } },
+	'Treinador Arte Completa': { brilho: 2, halo: '#ffd24d', particulas: { n: 28, cores: ['#fff3b0', '#ffd24d', '#ffffff'] } },
+	'Rara Secreta':            { brilho: 3, holo: 'ouro', halo: '#ffb300', pulso: true, flash: 'rgba(255,200,60,.45)', particulas: { n: 70, estrelas: 20, chuva: true, cores: ['#fff1a8', '#ffd24d', '#ffb300'] } },
+	'Rara Brilhante':          { brilho: 2, holo: true, halo: '#ffe27a', pulso: true, particulas: { n: 40, estrelas: 12, cores: ['#fff6c4', '#ffe27a', '#ffffff'] } },
+	'Rara Brilhante V':        { brilho: 2, holo: true, halo: '#ffe27a', pulso: true, particulas: { n: 44, estrelas: 14, cores: ['#fff6c4', '#ffe27a', '#8fc0ff'] } },
+	'Rara Brilhante VMAX':     { brilho: 3, holo: true, halo: '#ffd24d', pulso: true, particulas: { n: 56, estrelas: 18, cores: ['#fff6c4', '#ffd24d', '#ff6b6b'] } },
+	'Ultra Rara Brilhante':    { brilho: 3, holo: 'ouro', halo: '#ffd24d', pulso: true, flash: 'rgba(255,220,90,.4)', particulas: { n: 60, estrelas: 18, chuva: true, cores: ['#fff6c4', '#ffd24d', '#ffffff'] } },
+	'ACE SPEC':                { brilho: 2, halo: '#ff5ea8', pulso: true, particulas: { n: 34, estrelas: 8, cores: ['#ffd1e6', '#ff5ea8', '#ffffff'] } },
+	'Rara Preto e Branco':     { brilho: 2, halo: '#ffffff', pulso: true, particulas: { n: 34, estrelas: 8, cores: ['#ffffff', '#9aa1ad', '#2a2d34'] } },
+	'Rara Hiper':              { brilho: 3, holo: 'ouro', halo: '#ffb300', pulso: true, flash: 'rgba(255,200,60,.5)', particulas: { n: 90, estrelas: 28, chuva: true, cores: ['#fff1a8', '#ffd24d', '#ffb300', '#ff8a00'] } },
+	'Coleção Clássica':        { brilho: 1, halo: '#8fd0ff', particulas: { n: 14, cores: ['#ffffff', '#8fd0ff'] } },
 }
 const CLASSES_EFEITO = ['ef-ativo', 'ef-com-holo', 'ef-holo-ouro', 'ef-pulso']
 let idEfeito = 0          // muda a cada início/parada: partículas antigas se encerram sozinhas
@@ -648,7 +668,7 @@ function linkLiga(set, carta) {
 	if (set.id === '30th' && /^[BGR]$/.test(carta.n)) total = 'RGB'
 	else if (/^\d+$/.test(carta.n) && set.oficiais > 0 && set.id !== '30th-c') total = String(set.oficiais).padStart(3, '0')
 	if (!total) return { url: busca, busca, exato: false }
-	return { url: `${LIGA}?view=cards/card&card=${codificarLiga(`${carta.nome}(${carta.n}/${total})`)}`, busca, exato: true }
+	return { url: `${LIGA}?view=cards/card&card=${codificarLiga(`${carta.nome}(${/^\d+$/.test(carta.n) ? carta.n.padStart(3, '0') : carta.n}/${total})`)}`, busca, exato: true }
 }
 
 // A estrela da lista de desejos aparece quando a carta termina de girar e para de frente.
@@ -724,7 +744,7 @@ $('#zoom').addEventListener('contextmenu', evento => evento.preventDefault())
 /* ---------- Tela: início (lista de sets) ---------- */
 /* ---------- Aba: Coleções (lista de sets) ---------- */
 function telaColecoes() {
-	definirTopo('Coleções', 'Série Megaevolução', false)
+	definirTopo('Coleções', `${dados.sets.length} coleções`, false)
 
 	tela.innerHTML = `
 		${htmlConvite()}
@@ -761,7 +781,7 @@ function atualizarResumo() {
 
 function desenharColecoes() {
 	const conteudo = $('#conteudo')
-	conteudo.innerHTML = `<ul class="lista-sets">${dados.sets.map(set => {
+	const itemDoSet = set => {
 		const p = progresso(set)
 		return `
 			<li><a class="item-set" href="#/set/${encodeURIComponent(set.id)}" data-set="${escapar(set.id)}">
@@ -773,7 +793,13 @@ function desenharColecoes() {
 				</span>
 				<span class="pct${p.pct === 100 ? ' completa' : ''}">${p.pct}%</span>
 			</a></li>`
-	}).join('')}</ul>`
+	}
+	conteudo.innerHTML = dados.series.map(serie => {
+		const sets = dados.sets.filter(set => set.serie === serie.id)
+		const soma = sets.reduce((t, set) => { const p = progresso(set); return { tem: t.tem + p.tem, total: t.total + p.total } }, { tem: 0, total: 0 })
+		return `<h2 class="titulo-serie">${escapar(serie.nome)}<small>${soma.tem} de ${soma.total} cartas · ${sets.length} coleções</small></h2>
+			<ul class="lista-sets">${sets.map(itemDoSet).join('')}</ul>`
+	}).join('')
 
 	// Logo do set; se não houver, fica a sigla em texto.
 	for (const img of conteudo.querySelectorAll('img[data-logo]')) {
@@ -786,7 +812,9 @@ function desenharColecoes() {
 
 /* ---------- Aba: Pesquisa ---------- */
 const ORDEM_RARIDADES = ['Comum', 'Incomum', 'Rara', 'Rara Dupla', 'Ultra Rara', 'Rara Ilustrada', 'Rara Ilustrada Especial',
-	'Mega Rara Hiper', 'Rara Mega Ataque', 'Rara Pikachu', 'Rara Futurista', 'Rara RGB', 'Promo']
+	'Mega Rara Hiper', 'Rara Mega Ataque', 'Rara Pikachu', 'Rara Futurista', 'Rara RGB', 'Promo',
+	'Rara Holo', 'Rara Holo V', 'Rara Holo VMAX', 'Rara Holo VSTAR', 'Rara Radiante', 'Rara Incrível', 'Treinador Arte Completa', 'Rara Secreta',
+	'Rara Brilhante', 'Rara Brilhante V', 'Rara Brilhante VMAX', 'Ultra Rara Brilhante', 'ACE SPEC', 'Rara Preto e Branco', 'Rara Hiper', 'Coleção Clássica']
 const PASSO_PESQUISA = 60
 // Os filtros ficam guardados enquanto o app está aberto (ao trocar de aba e voltar, continuam).
 const pesquisa = { texto: '', set: '', raridade: '', status: 'todas', limite: PASSO_PESQUISA }
@@ -825,9 +853,9 @@ function telaPesquisa() {
 		}, 120)
 	})
 	atualizarSeletorSet()
-	$('#filtro-set').addEventListener('click', abrirEscolhaSet)
+	$('#filtro-set').addEventListener('click', () => abrirEscolhaSet())
 	atualizarSeletorRaridade()
-	$('#filtro-raridade').addEventListener('click', abrirEscolhaRaridade)
+	$('#filtro-raridade').addEventListener('click', () => abrirEscolhaRaridade())
 	$('#filtro-status').addEventListener('click', evento => {
 		const botao = evento.target.closest('button')
 		if (!botao) return
@@ -897,6 +925,22 @@ const SIMBOLOS_RARIDADE = {
 	'Rara Futurista': ['estrela-roxa'],
 	'Rara RGB': ['estrela-vermelha', 'estrela-verde', 'estrela-azul'],
 	'Promo': ['promo'],
+	'Rara Holo': ['estrela-preta'],
+	'Rara Holo V': ['estrela-azul'],
+	'Rara Holo VMAX': ['estrela-vermelha'],
+	'Rara Holo VSTAR': ['estrela-roxa'],
+	'Rara Radiante': ['estrela-rosa'],
+	'Rara Incrível': ['estrela-verde', 'estrela-roxa'],
+	'Treinador Arte Completa': ['estrela-branca'],
+	'Rara Secreta': ['estrela-dourada'],
+	'Rara Brilhante': ['brilho-dourado'],
+	'Rara Brilhante V': ['brilho-dourado', 'estrela-azul'],
+	'Rara Brilhante VMAX': ['brilho-dourado', 'estrela-vermelha'],
+	'Ultra Rara Brilhante': ['brilho-dourado', 'brilho-dourado'],
+	'ACE SPEC': ['estrela-rosa', 'estrela-rosa'],
+	'Rara Preto e Branco': ['estrela-preta', 'estrela-branca'],
+	'Rara Hiper': ['estrela-dourada', 'estrela-dourada', 'estrela-dourada'],
+	'Coleção Clássica': ['promo'],
 }
 function htmlIconeRaridade(raridade) {
 	const nomes = raridade ? SIMBOLOS_RARIDADE[raridade] || ['circulo'] : ['circulo', 'losango', 'estrela-preta']   // vazio = todas
@@ -913,7 +957,7 @@ let aoEscolher = null
 function abrirEscolha(titulo, opcoes, atual, escolheu) {
 	if (!$('#escolha').hidden) return
 	$('#escolha-titulo').textContent = titulo
-	$('#opcoes-escolha').innerHTML = opcoes.map(o => `<li><button class="opcao-set${o.apagada ? ' apagada' : ''}" role="radio" aria-checked="${o.valor === atual}" data-valor="${escapar(o.valor)}">
+	$('#opcoes-escolha').innerHTML = opcoes.map(o => o.cabecalho ? `<li class="cabecalho-escolha">${escapar(o.cabecalho)}</li>` : `<li><button class="opcao-set${o.apagada ? ' apagada' : ''}" role="radio" aria-checked="${o.valor === atual}" data-valor="${escapar(o.valor)}">
 		${o.icone}
 		<span class="opcao-nome">${escapar(o.rotulo)}<small>${escapar(o.detalhe)}</small></span>
 		<svg class="marca" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
@@ -945,7 +989,8 @@ $('#escolha').addEventListener('click', evento => {
 function abrirEscolhaSet(estado = pesquisa, aoMudar = desenharPesquisa, soDesejadas = false) {
 	const contar = set => cartasDoSet(set).filter(c => !soDesejadas || desejada(set.id, c.n)).length
 	const opcoes = [{ valor: '', icone: htmlIconeSet(null), rotulo: 'Todos os sets', detalhe: `${dados.sets.length} coleções` },
-		...dados.sets.map(set => ({ valor: set.id, icone: htmlIconeSet(set), rotulo: set.nome, detalhe: `${contar(set)} cartas` }))]
+		...dados.series.flatMap(serie => [{ cabecalho: serie.nome },
+			...dados.sets.filter(set => set.serie === serie.id).map(set => ({ valor: set.id, icone: htmlIconeSet(set), rotulo: set.nome, detalhe: `${contar(set)} cartas` }))])]
 	abrirEscolha('Coleção', opcoes, estado.set, valor => {
 		estado.set = valor
 		estado.limite = PASSO_PESQUISA
@@ -1740,12 +1785,20 @@ const TEMAS = {
 	'30th-c': temaDoSet('Coleção Clássica de 30 Anos', '30th-c',
 		['#fcf1e4', '#ffffff', '#f6dfc4', '#ebc9a0', '#2a1608', '#85624a', '#d9620f'],
 		['#170e08', '#231610', '#36231a', '#4d3322', '#fbeadb', '#c8a58a', '#ff8a3d', '#2a1204']),
+	// Escarlate e Violeta: violeta do logo, sobre fundo quente
+	'sv': temaDoSet('Escarlate e Violeta', 'sv01',
+		['#f7f0fb', '#ffffff', '#eadcf6', '#dac6ee', '#22103a', '#6f5a8f', '#8a3fd1'],
+		['#130b1c', '#1d1229', '#2c1c40', '#412a5c', '#f3eafc', '#b39bd0', '#c58bff', '#1c0a30']),
+	// Espada e Escudo: azul da espada e do escudo
+	'swsh': temaDoSet('Espada e Escudo', 'swsh1',
+		['#edf1fb', '#ffffff', '#dce4f6', '#c6d2ee', '#0d1633', '#505b82', '#2b4fd6'],
+		['#090e1f', '#101830', '#192647', '#26396b', '#e8eeff', '#8d9bc7', '#6f8dff', '#07102b']),
 	// Promos MEP: grafite e prata da estrela preta
 	'mep': temaDoSet('Promos MEP', 'mep',
 		['#f0f1f3', '#ffffff', '#e3e5e9', '#d0d3da', '#13151a', '#5c616c', '#454b59'],
 		['#0d0e11', '#17181d', '#23252c', '#33363f', '#eceef2', '#9296a2', '#c3c8d4', '#101216']),
 }
-const ORDEM_TEMAS = ['padrao', 'me01', 'me02', 'me02.5', 'me03', 'me04', 'me05', '30th', '30th-c', 'mep', 'personalizado']
+const ORDEM_TEMAS = ['padrao', 'me01', 'me02', 'me02.5', 'me03', 'me04', 'me05', '30th', '30th-c', 'mep', 'sv', 'swsh', 'personalizado']
 // Temas antigos (v24) → o tema de coleção mais parecido
 const TEMAS_ANTIGOS = { oceano: 'me04', floresta: 'me01', 'por-do-sol': '30th-c', sakura: 'me02', 'meia-noite': 'me05', eletrico: 'me02.5', mega: 'me02' }
 const idDoTema = () => { const id = ler(CHAVE_PALETA) || 'padrao'; return TEMAS_ANTIGOS[id] || id }
