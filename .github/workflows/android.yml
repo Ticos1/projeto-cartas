@@ -82,6 +82,6 @@ jobs:
         run: |
           gh release create "v1.$VERSAO" colecao-tcg.apk "colecao-tcg-1.$VERSAO.apk" \
             --target "$GITHUB_SHA" \
-            --title "Coleção TCG 1.$VERSAO" \
+            --title "Ticards 1.$VERSAO" \
             --notes "Baixe o arquivo **colecao-tcg.apk** no celular Android e toque nele para instalar." \
             --latest

@@ -15,7 +15,7 @@ const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v29'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v30'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -239,7 +239,7 @@ function definirTopo(titulo, subtitulo, comVoltar) {
 	$('#subtitulo').textContent = subtitulo
 	$('#voltar').hidden = !comVoltar
 	$('#abrir-gaveta').hidden = comVoltar
-	document.title = `${titulo} · Minha Coleção TCG`
+	document.title = `${titulo} · Ticards`
 }
 
 /* ---------- Cartas na grade ---------- */
@@ -1287,7 +1287,7 @@ function logsFiltrados() {
 function textoDosLogs() {
 	const cabecalho = infoDoSistema().map(([rotulo, valor]) => `${rotulo}: ${valor}`).join('\n')
 	const linhas = logs.map(l => `[${new Date(l.t).toISOString().replace('T', ' ').slice(0, 19)}] ${ROTULO_NIVEL[l.n] || l.n} ${l.m}${l.d ? `\n    ${l.d}` : ''}`)
-	return `Coleção TCG - relatório de logs\nGerado em: ${new Date().toISOString()}\n${cabecalho}\n\n${linhas.join('\n') || '(sem registros)'}\n`
+	return `Ticards - relatório de logs\nGerado em: ${new Date().toISOString()}\n${cabecalho}\n\n${linhas.join('\n') || '(sem registros)'}\n`
 }
 
 function atualizarListaLogs() {
@@ -1343,7 +1343,7 @@ function desenharLogs() {
 	})
 	$('#logs-copiar').addEventListener('click', async () => avisar(await copiarTexto(textoDosLogs()) ? 'Logs copiados.' : 'Não foi possível copiar.'))
 	$('#logs-exportar').addEventListener('click', async () => {
-		const resultado = await entregarArquivo(`colecao-tcg-logs-${new Date().toISOString().slice(0, 10)}.txt`, textoDosLogs(), 'text/plain', 'Logs da Coleção TCG')
+		const resultado = await entregarArquivo(`colecao-tcg-logs-${new Date().toISOString().slice(0, 10)}.txt`, textoDosLogs(), 'text/plain', 'Logs do Ticards')
 		if (resultado === 'baixado') avisar('Logs baixados.')
 		else if (resultado === 'erro') avisar('Não foi possível compartilhar os logs.')
 	})
@@ -2005,7 +2005,7 @@ async function instalarBaixado() {
 		if (!permitido) {
 			// O Android exige que o usuário permita, uma vez, que este app instale outros apps.
 			aguardandoPermissao = true
-			mostrarEstadoApk('Quase lá: ligue "Permitir desta fonte" para a Coleção TCG e volte para este app.')
+			mostrarEstadoApk('Quase lá: ligue "Permitir desta fonte" para o Ticards e volte para este app.')
 			await atualizador.pedirPermissao()
 			return
 		}

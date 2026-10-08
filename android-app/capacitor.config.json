@@ -1,6 +1,6 @@
 {
   "appId": "io.github.ticos1.colecaotcg",
-  "appName": "Coleção TCG",
+  "appName": "Ticards",
   "webDir": "www",
   "server": {
     "url": "https://ticos1.github.io/projeto-cartas/",

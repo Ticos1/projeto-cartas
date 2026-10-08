@@ -1,4 +1,4 @@
-# Minha Coleção TCG (PT-BR)
+# Ticards — coleção Pokémon TCG (PT-BR)
 
 | | |
 |---|---|
