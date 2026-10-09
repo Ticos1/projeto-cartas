@@ -3,6 +3,9 @@ package io.github.ticos1.colecaotcg;
 import android.app.DownloadManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
@@ -20,22 +23,82 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.File;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Atualização do app pelo próprio app: baixa o APK novo com o gerenciador de downloads do
  * Android (com notificação e progresso) e abre o instalador.
  *
- * Só baixa de https://github.com/Ticos1/projeto-cartas/releases/ (os APKs publicados).
+ * Segurança: só baixa APKs publicados em https://github.com/Ticos1/projeto-cartas/releases/ e só abre o
+ * instalador se o APK baixado for deste mesmo app e assinado com a mesma chave do app instalado.
  */
 @CapacitorPlugin(name = "Atualizador")
 public class AtualizadorPlugin extends Plugin {
 
-    private static final String PREFIXO_PERMITIDO = "https://github.com/Ticos1/projeto-cartas/releases/";
+    // Ex.: /Ticos1/projeto-cartas/releases/latest/download/colecao-tcg.apk
+    //      /Ticos1/projeto-cartas/releases/download/v1.5/colecao-tcg-1.5.apk
+    private static final Pattern CAMINHO_PERMITIDO = Pattern.compile(
+        "^/Ticos1/projeto-cartas/releases/(latest/download|download/[A-Za-z0-9._-]+)/[A-Za-z0-9._-]+\\.apk$");
     private static final String TIPO_APK = "application/vnd.android.package-archive";
 
     private final Handler principal = new Handler(Looper.getMainLooper());
     private long idDownload = -1;
     private Runnable verificador = null;
+
+    private boolean urlPermitida(String url) {
+        if (url == null) return false;
+        Uri uri = Uri.parse(url);
+        String caminho = uri.getPath();
+        return "https".equals(uri.getScheme())
+            && "github.com".equals(uri.getHost())
+            && uri.getPort() == -1
+            && uri.getUserInfo() == null
+            && uri.getQuery() == null
+            && uri.getFragment() == null
+            && caminho != null
+            && !caminho.contains("/./") && !caminho.contains("/../")
+            && CAMINHO_PERMITIDO.matcher(caminho).matches();
+    }
+
+    @SuppressWarnings("deprecation")
+    private Set<String> assinaturas(PackageInfo info) {
+        Set<String> resultado = new HashSet<>();
+        if (info == null) return resultado;
+        Signature[] lista = null;
+        if (Build.VERSION.SDK_INT >= 28 && info.signingInfo != null) {
+            lista = info.signingInfo.hasMultipleSigners()
+                ? info.signingInfo.getApkContentsSigners()
+                : info.signingInfo.getSigningCertificateHistory();
+        }
+        if (lista == null) lista = info.signatures;
+        if (lista != null) for (Signature s : lista) resultado.add(s.toCharsString());
+        return resultado;
+    }
+
+    /** O APK baixado é deste app (mesmo pacote) e assinado com a mesma chave? */
+    @SuppressWarnings("deprecation")
+    private boolean apkConfiavel(File arquivo) {
+        try {
+            PackageManager pm = getContext().getPackageManager();
+            int flags = Build.VERSION.SDK_INT >= 28 ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
+            PackageInfo baixado = pm.getPackageArchiveInfo(arquivo.getAbsolutePath(), flags);
+            if (baixado == null || !getContext().getPackageName().equals(baixado.packageName)) return false;
+            if (baixado.applicationInfo != null) {
+                baixado.applicationInfo.sourceDir = arquivo.getAbsolutePath();
+                baixado.applicationInfo.publicSourceDir = arquivo.getAbsolutePath();
+            }
+            Set<String> doBaixado = assinaturas(baixado);
+            Set<String> doInstalado = assinaturas(pm.getPackageInfo(getContext().getPackageName(), flags));
+            // Com histórico de chaves (Android 9+), basta a chave atual do instalado aparecer no APK novo.
+            if (doBaixado.isEmpty() || doInstalado.isEmpty()) return false;
+            for (String chave : doInstalado) if (doBaixado.contains(chave)) return true;
+            return false;
+        } catch (Exception erro) {
+            return false;
+        }
+    }
 
     private boolean nomeValido(String nome) {
         return nome != null && nome.matches("[A-Za-z0-9._-]+\\.apk");
@@ -80,7 +143,7 @@ public class AtualizadorPlugin extends Plugin {
     public void baixar(PluginCall call) {
         String url = call.getString("url");
         String nome = call.getString("nome");
-        if (url == null || !url.startsWith(PREFIXO_PERMITIDO)) {
+        if (!urlPermitida(url)) {
             call.reject("Endereço não permitido.");
             return;
         }
@@ -181,6 +244,11 @@ public class AtualizadorPlugin extends Plugin {
         }
         if (!podeInstalarApps()) {
             call.reject("Sem permissão para instalar.");
+            return;
+        }
+        if (!apkConfiavel(arquivo)) {
+            arquivo.delete();
+            call.reject("O arquivo baixado não é uma versão oficial do Ticards. Por segurança, ele foi apagado.");
             return;
         }
         Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", arquivo);

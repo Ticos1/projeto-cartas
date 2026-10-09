@@ -170,3 +170,10 @@ Nas séries Escarlate e Violeta e Espada e Escudo o site guarda só a imagem peq
 
 ## Escolher quais coleções aparecem
 Em **Coleções**, o botão **Escolher coleções** abre uma lista com um interruptor para cada coleção (e "Todas / Nenhuma" por série). As desligadas somem de Coleções, da Pesquisa e dos filtros; o que já foi marcado continua salvo e a Lista de Desejos não muda. A escolha fica salva no aparelho e sincroniza pela conta (campo `colecoesEscondidas`).
+
+## Segurança
+- **Dados na nuvem:** as regras do Firestore só deixam cada pessoa ler e escrever o próprio documento (`colecoes/{uid}`). Testado: sem login nada é lido; logado, não dá para ler, listar ou alterar o documento de outra pessoa nem criar outras coleções.
+- **Senhas:** ficam só no Firebase Authentication (o app nunca guarda a senha).
+- **Atualização do APK:** o app só baixa APKs de `github.com/Ticos1/projeto-cartas/releases/…` e, antes de abrir o instalador, confere se o arquivo é do mesmo app e assinado com a mesma chave; se não for, apaga o arquivo. O próprio Android também recusa uma atualização assinada com outra chave.
+- **APK:** sem backup automático dos dados do app (`allowBackup=false`), sem tráfego sem criptografia, e só as permissões de internet e de instalar a própria atualização.
+- **Chave de assinatura:** fica só nos segredos do GitHub (nunca no repositório).
