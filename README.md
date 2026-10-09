@@ -177,3 +177,6 @@ Em **Coleções**, o botão **Escolher coleções** abre uma lista com um interr
 - **Atualização do APK:** o app só baixa APKs de `github.com/Ticos1/projeto-cartas/releases/…` e, antes de abrir o instalador, confere se o arquivo é do mesmo app e assinado com a mesma chave; se não for, apaga o arquivo. O próprio Android também recusa uma atualização assinada com outra chave.
 - **APK:** sem backup automático dos dados do app (`allowBackup=false`), sem tráfego sem criptografia, e só as permissões de internet e de instalar a própria atualização.
 - **Chave de assinatura:** fica só nos segredos do GitHub (nunca no repositório).
+
+## Como usar o app (tutorial)
+Aba **Como usar o app** (primeira do menu ☰): um guia passo a passo de todas as funções. Ela é a tela que aparece sempre que o app é aberto; o botão **Começar a usar** leva para a Pesquisa.

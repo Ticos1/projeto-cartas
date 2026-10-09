@@ -16,7 +16,7 @@ const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v32'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v33'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -1281,6 +1281,64 @@ function desenharPesquisa() {
 	}
 }
 
+/* ---------- Aba: Como usar o app (tutorial) ---------- */
+const PASSOS_TUTORIAL = [
+	{ icone: '☰', titulo: 'Navegue pelas abas', texto: [
+		'Toque nos <b>três riscos</b> no canto de cima para trocar de aba: Como usar, Pesquisa, Coleções, Lista de Desejos e Configurações.',
+		'O botão <b>voltar</b> do celular volta para a tela anterior (e fecha a carta ampliada ou os menus).'] },
+	{ icone: '✓', titulo: 'Marque as cartas que você tem', texto: [
+		'<b>Toque</b> numa carta para marcar que você tem (ela fica colorida, com um ✓ verde). Toque de novo para desmarcar.',
+		'As cartas que faltam ficam apagadas, em preto e branco.'] },
+	{ icone: '👆', titulo: 'Segure para ver a carta grande', texto: [
+		'<b>Segure</b> uma carta por meio segundo: ela gira, mostra o verso e para de frente, com efeitos conforme a raridade.',
+		'Na carta grande dá para marcar ou desmarcar, e abrir a carta na <b>Liga Pokémon</b> para comprar.',
+		'Toque fora da carta (ou use o voltar) para fechar.'] },
+	{ icone: '📚', titulo: 'Coleções', texto: [
+		'Mostra cada coleção com o seu progresso (quantas você tem e a porcentagem), agrupadas por série.',
+		'Em <b>Escolher coleções</b> você liga só as que coleciona; as outras somem do app.',
+		'Dentro de uma coleção: o filtro <b>Faltam</b> mostra só o que falta, e o botão <b>Master set</b> inclui ou tira as cartas especiais (secretas).'] },
+	{ icone: '🔍', titulo: 'Pesquisa', texto: [
+		'Busque pelo <b>nome</b> (ex.: Pikachu) ou pelo <b>número</b> (ex.: 25 ou 025/132).',
+		'Filtre por <b>coleção</b> e por <b>raridade</b> (com os mesmos símbolos impressos nas cartas), e por <b>Todas / Faltam / Tenho</b>.'] },
+	{ icone: '★', titulo: 'Lista de Desejos', texto: [
+		'Segure uma carta e espere ela parar de girar: aparece uma <b>estrela</b> no canto de cima. Toque nela para guardar a carta na sua lista.',
+		'Na aba <b>Lista de Desejos</b> você filtra por coleção e raridade e usa <b>Comprar na Liga Pokémon</b> para abrir as cartas uma por uma na Liga (lá, escolha qualidade NM e uma loja do seu estado).'] },
+	{ icone: '☁', titulo: 'Conta e sincronização', texto: [
+		'Toque na <b>nuvem</b> no topo para entrar ou criar sua conta (e-mail e senha).',
+		'Com a conta, a coleção, a lista de desejos e as coleções escolhidas ficam iguais no celular e no PC (site: ticos1.github.io/projeto-cartas).',
+		'Sem internet o app continua funcionando; as mudanças são enviadas quando a conexão voltar.'] },
+	{ icone: '🎨', titulo: 'Temas e logs', texto: [
+		'Em <b>Configurações → Temas</b>: modo claro, escuro ou automático e um tema com as cores de cada coleção (ou a sua cor).',
+		'Em <b>Configurações → Logs</b> ficam os erros do app; se algo der errado, use <b>Compartilhar</b> e mande para quem for te ajudar.'] },
+	{ icone: '⋮', titulo: 'Menu de três pontinhos', texto: [
+		'<b>Backup</b>: exporte sua coleção para um arquivo e importe de volta quando quiser.',
+		'<b>App Android</b>: o app avisa quando há uma versão nova e se atualiza sozinho; use <b>Procurar atualização</b> para conferir.'] },
+]
+
+function telaComoUsar() {
+	definirTopo('Como usar o app', 'Guia rápido do Ticards', false)
+	tela.innerHTML = `
+		<section class="tutorial-topo">
+			<img src="icons/icon-192.png" alt="" width="72" height="72">
+			<div>
+				<h2>Bem-vindo ao Ticards!</h2>
+				<p>Controle sua coleção de cartas Pokémon TCG: marque o que você tem, veja o que falta e monte sua lista de desejos.</p>
+			</div>
+		</section>
+		<a class="botao" href="#/pesquisa">Começar a usar</a>
+		<ol class="tutorial">${PASSOS_TUTORIAL.map((passo, i) => `
+			<li class="passo">
+				<span class="passo-icone" aria-hidden="true">${passo.icone}</span>
+				<div>
+					<h3><span class="passo-numero">${i + 1}.</span> ${passo.titulo}</h3>
+					${passo.texto.map(t => `<p>${t}</p>`).join('')}
+				</div>
+			</li>`).join('')}
+		</ol>
+		<a class="botao" href="#/pesquisa">Começar a usar</a>
+		<p class="dica rodape">Este guia abre sempre que você entra no app. Você pode voltar a ele pelo menu ☰ → Como usar o app.</p>`
+}
+
 /* ---------- Aba: Configurações (sub-abas Temas e Logs) ---------- */
 function telaConfiguracoes(sub) {
 	definirTopo('Configurações', sub === 'logs' ? 'Logs' : 'Temas', false)
@@ -1571,14 +1629,15 @@ function atualizarProgressoNaTela() {
 }
 
 /* ---------- Navegação (endereços com #) ---------- */
-// Abas: #/pesquisa (a primeira, abre por padrão) e #/colecoes. Um set (#/set/ID) fica dentro de Coleções.
+// Abas: #/como-usar (tutorial, abre por padrão ao entrar no app), #/pesquisa, #/colecoes, #/desejos e #/configuracoes. Um set (#/set/ID) fica dentro de Coleções.
 function rotaAtual() {
 	const partes = location.hash.replace(/^#\/?/, '').split('/')
 	if (partes[0] === 'set') return { aba: 'colecoes', setId: decodeURIComponent(partes[1] || '') }
 	if (partes[0] === 'colecoes') return { aba: 'colecoes' }
 	if (partes[0] === 'desejos') return { aba: 'desejos', sub: partes[1] === 'comprar' ? 'comprar' : '' }
 	if (partes[0] === 'configuracoes') return { aba: 'configuracoes', sub: partes[1] === 'logs' ? 'logs' : 'temas' }
-	return { aba: 'pesquisa' }
+	if (partes[0] === 'pesquisa') return { aba: 'pesquisa' }
+	return { aba: 'ajuda' }
 }
 
 function navegar() {
@@ -1593,6 +1652,7 @@ function navegar() {
 	const { setId, aba, sub } = rotaAtual()
 	if (setId) telaSet(setId)
 	else if (aba === 'colecoes') telaColecoes()
+	else if (aba === 'ajuda') telaComoUsar()
 	else if (aba === 'desejos') sub === 'comprar' ? telaComprarNaLiga() : telaDesejos()
 	else if (aba === 'configuracoes') telaConfiguracoes(sub)
 	else telaPesquisa()

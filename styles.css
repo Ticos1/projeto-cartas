@@ -908,3 +908,18 @@ main {
 .interruptor::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .35); transition: transform .2s; }
 .interruptor:checked { background: var(--destaque); }
 .interruptor:checked::after { transform: translateX(18px); }
+
+/* ---------- Como usar o app (tutorial) ---------- */
+.tutorial-topo { display: flex; align-items: center; gap: 14px; margin: 4px 0 6px; }
+.tutorial-topo img { flex: none; border-radius: 18px; }
+.tutorial-topo h2 { margin: 0 0 4px; font-size: 1.15rem; }
+.tutorial-topo p { margin: 0; color: var(--texto-fraco); font-size: .9rem; }
+a.botao { text-align: center; text-decoration: none; }
+.tutorial { list-style: none; margin: 14px 0; padding: 0; display: grid; gap: 10px; }
+.passo { display: flex; gap: 12px; padding: 14px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 14px; }
+.passo-icone { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: var(--superficie-2); color: var(--destaque); font-size: 1.25rem; font-weight: 700; }
+.passo h3 { margin: 2px 0 6px; font-size: 1rem; }
+.passo-numero { color: var(--destaque); }
+.passo p { margin: 0 0 6px; font-size: .9rem; line-height: 1.45; color: var(--texto-fraco); }
+.passo p:last-child { margin-bottom: 0; }
+.passo b { color: var(--texto); }
