@@ -2,7 +2,7 @@
 //
 // Ao mudar algum arquivo do app, aumente o número da VERSAO para os celulares
 // baixarem a versão nova.
-const VERSAO = 'v36'
+const VERSAO = 'v37'
 const CACHE_APP = `colecao-app-${VERSAO}`
 const CACHE_IMAGENS = 'colecao-imagens'
 
@@ -14,6 +14,7 @@ const ARQUIVOS_APP = [
 	'nuvem.js',
 	'data/cartas.json',
 	'manifest.webmanifest',
+	'privacidade.html',
 	'icons/icon.svg',
 	'icons/icon-192.png',
 	'icons/icon-512.png',
@@ -68,7 +69,10 @@ self.addEventListener('fetch', evento => {
 // nunca mistura versões). A versão nova chega pelo service worker novo, que recarrega a tela.
 async function arquivoDoApp(request) {
 	const cache = await caches.open(CACHE_APP)
-	const guardado = await cache.match(request.mode === 'navigate' ? 'index.html' : request, { ignoreSearch: true })
+	// Abrir o app (endereço da pasta ou index.html) usa o index.html guardado; outras páginas, a própria.
+	const caminho = new URL(request.url).pathname
+	const ehApp = request.mode === 'navigate' && (caminho.endsWith('/') || caminho.endsWith('/index.html'))
+	const guardado = await cache.match(ehApp ? 'index.html' : request, { ignoreSearch: true })
 	if (guardado) return guardado
 	try {
 		return await fetch(request)

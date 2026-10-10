@@ -946,3 +946,9 @@ html.com-anuncio .gaveta { width: min(100vw, calc(50vw + 170px)); }
 	background: var(--superficie-2);
 }
 .gaveta-anuncio span { position: absolute; left: 2px; top: -20px; font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--texto-fraco); }
+
+/* ---------- Excluir conta ---------- */
+.link.perigo { color: var(--destaque); opacity: .85; margin-top: 6px; }
+.botao.perigo { background: #d93a3a; color: #fff; }
+#form-excluir { margin-top: 10px; padding: 12px; border: 1px solid #d93a3a55; border-radius: 12px; }
+.rodape a { color: inherit; }

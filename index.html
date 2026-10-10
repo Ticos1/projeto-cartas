@@ -98,6 +98,15 @@
 					<p class="dica">Conectado como <b id="conta-email"></b></p>
 					<p class="dica" id="conta-status"></p>
 					<button class="botao secundario" id="botao-sair">Sair da conta</button>
+					<button class="link perigo" type="button" id="botao-excluir-conta">Excluir minha conta</button>
+					<form id="form-excluir" hidden>
+						<p class="dica"><b>Isso apaga sua conta e toda a sua coleção na nuvem, para sempre.</b> Para confirmar, digite sua senha.</p>
+						<input class="busca campo" id="excluir-senha" type="password" placeholder="Sua senha" autocomplete="current-password" required>
+						<label class="opcao-lista"><input type="checkbox" id="excluir-local" checked> Apagar também os dados deste aparelho</label>
+						<p class="erro" id="excluir-erro" role="alert"></p>
+						<button class="botao perigo" type="submit" id="botao-confirmar-exclusao">Excluir definitivamente</button>
+						<button class="botao secundario" type="button" id="botao-cancelar-exclusao">Cancelar</button>
+					</form>
 				</div>
 				<p class="dica" id="conta-indisponivel" hidden>Login indisponível agora (sem internet). Sua coleção continua salva neste aparelho.</p>
 			</section>
@@ -115,7 +124,7 @@
 			<h2>Aparência e logs</h2>
 			<button class="botao secundario" id="menu-config">Temas, modo claro/escuro e logs</button>
 
-			<p class="dica rodape">Versão do app: <span id="versao-app">…</span> · Dados das cartas: TCGdex. Pokémon e seus nomes são marcas da Nintendo / The Pokémon Company.</p>
+			<p class="dica rodape">Versão do app: <span id="versao-app">…</span> · Dados das cartas: TCGdex. Pokémon e seus nomes são marcas da Nintendo / The Pokémon Company. <a href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a></p>
 			<button class="botao secundario" id="fechar-menu">Fechar</button>
 		</div>
 	</div>

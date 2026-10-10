@@ -47,7 +47,7 @@ jobs:
       - name: Montar o site
         run: |
           mkdir _site
-          cp -r index.html styles.css app.js nuvem.js sw.js manifest.webmanifest icons data img _site/
+          cp -r index.html privacidade.html styles.css app.js nuvem.js sw.js manifest.webmanifest icons data img _site/
           find _site/img -name '*.idioma' -delete
 
       - uses: actions/configure-pages@v5

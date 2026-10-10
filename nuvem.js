@@ -51,6 +51,7 @@ const MENSAGENS = {
 	'auth/user-not-found': 'E-mail ou senha incorretos.',
 	'auth/too-many-requests': 'Muitas tentativas. Espere alguns minutos e tente de novo.',
 	'auth/network-request-failed': 'Sem internet. Conecte-se e tente de novo.',
+	'auth/requires-recent-login': 'Por segurança, saia e entre de novo na conta antes de excluir.',
 }
 
 export function mensagemDeErro(erro) {
@@ -160,4 +161,18 @@ export function escondidasNaNuvem(ids, esconder) {
 	const operacao = esconder ? dbSdk.arrayUnion(...ids) : dbSdk.arrayRemove(...ids)
 	dbSdk.setDoc(documento, { colecoesEscondidas: operacao }, { merge: true })
 		.catch(erro => console.warn('Falha ao salvar na nuvem:', erro))
+}
+
+// Exclui a conta: confirma a senha, apaga o documento da coleção na nuvem e depois a conta.
+export async function excluirConta(senha) {
+	const usuario = auth.currentUser
+	if (!usuario) throw new Error('sem usuário')
+	await authSdk.reauthenticateWithCredential(usuario, authSdk.EmailAuthProvider.credential(usuario.email, senha))
+	const uid = usuario.uid
+	pararDeOuvir?.()
+	pararDeOuvir = null
+	await dbSdk.deleteDoc(dbSdk.doc(db, 'colecoes', uid))
+	documento = null
+	await authSdk.deleteUser(usuario)
+	try { localStorage.removeItem(`colecao-tcg-juntou-${uid}`) } catch { /* sem localStorage */ }
 }

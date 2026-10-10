@@ -187,3 +187,7 @@ Aba **Como usar o app** (primeira do menu ☰): um guia passo a passo de todas a
   - o **ID do app** em `android-app/android/app/src/main/AndroidManifest.xml` (`com.google.android.gms.ads.APPLICATION_ID`) — precisa gerar APK novo;
   - o **ID do bloco de anúncios (banner)** em `bloco` e `teste: false` na constante `ANUNCIO` do `app.js` — muda pelo site, sem APK novo.
 - O AdMob usa o ID de publicidade do aparelho; é preciso ter uma política de privacidade publicada para usar anúncios de verdade.
+
+## Privacidade e exclusão de conta
+- **Política de Privacidade:** `privacidade.html` (https://ticos1.github.io/projeto-cartas/privacidade.html), com link no menu ⋮ e no fim do tutorial. Use esse endereço no AdMob e numa futura publicação na Play Store.
+- **Excluir minha conta:** ⋮ → Conta → Excluir minha conta. Pede a senha, apaga o documento da coleção no Firestore e a conta no Firebase Authentication; opcionalmente apaga também os dados do aparelho.

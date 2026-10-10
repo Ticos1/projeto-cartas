@@ -16,7 +16,7 @@ const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v36'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v37'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -1365,7 +1365,7 @@ function telaComoUsar() {
 			</li>`).join('')}
 		</ol>
 		<a class="botao" href="#/pesquisa">Começar a usar</a>
-		<p class="dica rodape">Este guia abre sempre que você entra no app. Você pode voltar a ele pelo menu ☰ → Como usar o app.</p>`
+		<p class="dica rodape">Este guia abre sempre que você entra no app. Você pode voltar a ele pelo menu ☰ → Como usar o app. · <a href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a></p>`
 }
 
 /* ---------- Aba: Configurações (sub-abas Temas e Logs) ---------- */
@@ -2107,6 +2107,44 @@ $('#botao-esqueci').addEventListener('click', () => {
 		await nuvem.recuperarSenha(emailDigitado())
 		avisar('Enviamos um e-mail para você criar uma nova senha.')
 	})
+})
+
+// Excluir conta (exigido pela LGPD e pela Play Store): apaga a conta e a coleção na nuvem.
+function mostrarFormExcluir(mostrar) {
+	$('#form-excluir').hidden = !mostrar
+	$('#botao-excluir-conta').hidden = mostrar
+	$('#excluir-erro').textContent = ''
+	$('#excluir-senha').value = ''
+	if (mostrar) $('#excluir-senha').focus()
+}
+$('#botao-excluir-conta').addEventListener('click', () => mostrarFormExcluir(true))
+$('#botao-cancelar-exclusao').addEventListener('click', () => mostrarFormExcluir(false))
+$('#form-excluir').addEventListener('submit', async evento => {
+	evento.preventDefault()
+	if (!navigator.onLine) { $('#excluir-erro').textContent = 'Conecte-se à internet para excluir a conta.'; return }
+	if (!confirm('Tem certeza? Sua conta e sua coleção na nuvem serão apagadas para sempre.')) return
+	const botoes = document.querySelectorAll('#form-excluir button')
+	botoes.forEach(b => { b.disabled = true })
+	$('#excluir-erro').textContent = ''
+	try {
+		await nuvem.excluirConta($('#excluir-senha').value)
+		registrar('info', 'Conta excluída')
+		if ($('#excluir-local').checked) {
+			for (const chave of [CHAVE_COLECAO, CHAVE_DESEJOS, CHAVE_ESCONDIDAS, CHAVE_SEM_MASTER, CHAVE_LIGA_ABERTAS, CHAVE_LOGS]) {
+				try { localStorage.removeItem(chave) } catch { /* sem localStorage */ }
+			}
+			alert('Sua conta e seus dados foram excluídos.')
+			location.reload()
+			return
+		}
+		mostrarFormExcluir(false)
+		fecharMenu()
+		avisar('Conta excluída. Sua coleção continua salva só neste aparelho.')
+	} catch (erro) {
+		$('#excluir-erro').textContent = nuvem.mensagemDeErro(erro)
+	} finally {
+		botoes.forEach(b => { b.disabled = false })
+	}
 })
 
 $('#botao-sair').addEventListener('click', async () => {
