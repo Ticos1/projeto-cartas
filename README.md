@@ -191,3 +191,6 @@ Aba **Como usar o app** (primeira do menu ☰): um guia passo a passo de todas a
 ## Privacidade e exclusão de conta
 - **Política de Privacidade:** `privacidade.html` (https://ticos1.github.io/projeto-cartas/privacidade.html), com link no menu ⋮ e no fim do tutorial. Use esse endereço no AdMob e numa futura publicação na Play Store.
 - **Excluir minha conta:** ⋮ → Conta → Excluir minha conta. Pede a senha, apaga o documento da coleção no Firestore e a conta no Firebase Authentication; opcionalmente apaga também os dados do aparelho.
+
+## MYP Cards
+Na carta grande (cartas que faltam), "Comprar em:" tem dois botões lado a lado: **Liga Pokémon** e **MYP Cards**. O MYP abre a busca pelo nome da carta (`mypcards.com/pokemon?ProdutoSearch[query]=…`), porque as páginas de carta de lá usam números internos. Na tela "Comprar na Liga", cada carta também tem os botões **Liga** e **MYP**.

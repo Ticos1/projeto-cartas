@@ -16,7 +16,7 @@ const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v37'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v38'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -687,6 +687,10 @@ function linkLiga(set, carta) {
 	return { url: `${LIGA}?view=cards/card&card=${codificarLiga(`${carta.nome}(${/^\d+$/.test(carta.n) ? carta.n.padStart(3, '0') : carta.n}/${total})`)}`, busca, exato: true }
 }
 
+// MYP Cards: busca pelo nome da carta (o site usa números internos nas páginas das cartas,
+// então não dá para abrir a carta exata; a busca mostra todas as versões com esse nome).
+const linkMyp = carta => `https://mypcards.com/pokemon?ProdutoSearch%5Bquery%5D=${encodeURIComponent(carta.nome)}`
+
 // A estrela da lista de desejos aparece quando a carta termina de girar e para de frente.
 function mostrarEstrela() {
 	if (!$('#zoom').hidden) $('#zoom-estrela').classList.add('visivel')
@@ -704,7 +708,8 @@ function atualizarBotaoZoom() {
 	if ($('#zoom-liga')) {
 		$('#zoom-liga').hidden = marcada
 		$('#zoom-comprar').href = liga.url
-		$('#zoom-comprar-texto').textContent = liga.exato ? 'Comprar na Liga Pokémon' : 'Buscar na Liga Pokémon'
+		$('#zoom-comprar-texto').textContent = 'Liga Pokémon'
+		$('#zoom-myp').href = linkMyp(carta)
 		$('#zoom-buscar').href = liga.busca
 		$('#zoom-buscar').hidden = !liga.exato
 	}
@@ -716,7 +721,7 @@ function atualizarBotaoZoom() {
 $('#zoom').addEventListener('pointerdown', () => { toqueComecouNoZoom = true })
 
 // Os links da Liga também ignoram o "soltar" do dedo que segurou a carta.
-for (const link of [$('#zoom-comprar'), $('#zoom-buscar')].filter(Boolean)) {
+for (const link of [$('#zoom-comprar'), $('#zoom-myp'), $('#zoom-buscar')].filter(Boolean)) {
 	link.addEventListener('click', evento => {
 		evento.stopPropagation()
 		const novoToque = toqueComecouNoZoom || evento.detail === 0
@@ -1169,7 +1174,10 @@ function desenharComprarNaLiga() {
 			return `<li class="item-liga${aberta ? ' aberta' : ''}">
 				<span class="item-liga-img" data-set="${escapar(set.id)}" data-n="${escapar(carta.n)}"><img alt="" loading="lazy"></span>
 				<span class="item-liga-texto"><b>${escapar(carta.nome)}</b><small>${escapar([set.nome, numeroExibido(set, carta), carta.raridade].filter(Boolean).join(' · '))}</small>${aberta ? '<small class="item-liga-ok">✓ Aberta na Liga</small>' : ''}</span>
-				<a class="botao secundario item-liga-abrir" href="${escapar(linkLiga(set, carta).url)}" target="_blank" rel="noopener noreferrer" data-chave="${escapar(chave)}">${aberta ? 'Abrir de novo' : 'Abrir'}</a>
+				<span class="item-liga-botoes">
+					<a class="botao secundario item-liga-abrir" href="${escapar(linkLiga(set, carta).url)}" target="_blank" rel="noopener noreferrer" data-chave="${escapar(chave)}">${aberta ? 'Liga ✓' : 'Liga'}</a>
+					<a class="botao secundario item-liga-abrir" href="${escapar(linkMyp(carta))}" target="_blank" rel="noopener noreferrer">MYP</a>
+				</span>
 			</li>`
 		}).join('')}</ul>
 		${abertas ? '<button class="botao secundario" id="liga-recomecar">Recomeçar (desmarcar as abertas)</button>' : ''}`

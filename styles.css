@@ -952,3 +952,11 @@ html.com-anuncio .gaveta { width: min(100vw, calc(50vw + 170px)); }
 .botao.perigo { background: #d93a3a; color: #fff; }
 #form-excluir { margin-top: 10px; padding: 12px; border: 1px solid #d93a3a55; border-radius: 12px; }
 .rodape a { color: inherit; }
+
+/* ---------- Lojas na carta grande (Liga Pokémon e MYP Cards) ---------- */
+.zoom-lojas-titulo { margin: 10px 0 0; font-size: .8rem; color: #c6cad3; }
+.zoom-lojas { display: flex; gap: 8px; }
+.zoom-lojas .botao.comprar { flex: 1; min-width: 0; padding-left: 8px; padding-right: 8px; }
+.zoom-lojas .botao.comprar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-liga-botoes { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.item-liga-botoes .botao.item-liga-abrir { text-align: center; }
