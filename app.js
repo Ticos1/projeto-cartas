@@ -16,7 +16,7 @@ const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v33'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v34'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -1112,14 +1112,21 @@ function telaComprarNaLiga() {
 	tela.innerHTML = `
 		<div class="dica-liga">
 			<p><b>Como funciona</b></p>
-			<ol>
-				<li>Toque em <b>Abrir próxima</b>: a página dela abre na Liga Pokémon.</li>
-				<li>Lá, filtre a qualidade <b>NM</b> e escolha uma loja do <b>seu estado</b>.</li>
-				<li>Adicione ao carrinho e volte para cá para abrir a próxima.</li>
-			</ol>
+			<p>A Liga não deixa outros apps mexerem no seu carrinho, então o Ticards prepara tudo e você só confirma lá: use a <b>Compra por Lista</b> (todas de uma vez) ou abra as cartas uma por uma.</p>
 		</div>
 		<div id="conteudo"></div>`
 	desenharComprarNaLiga()
+}
+
+// "Compra por Lista" da Liga: cola-se uma lista de cartas e a Liga busca todas de uma vez,
+// mostra as lojas e deixa colocar no carrinho. O app monta a lista no formato "1 Nome (número/total)".
+const LIGA_COMPRA_POR_LISTA = `${LIGA}?view=cards/lista`
+let listaComNumero = ler('colecao-tcg-lista-com-numero') !== '0'
+function textoDaListaLiga(itens) {
+	return itens.map(({ set, carta }) => {
+		const numero = listaComNumero && /^\d+$/.test(carta.n) && set.oficiais ? ` (${numeroExibido(set, carta)})` : ''
+		return `1 ${carta.nome}${numero}`
+	}).join('\n')
 }
 
 function desenharComprarNaLiga() {
@@ -1136,6 +1143,19 @@ function desenharComprarNaLiga() {
 	const proxima = itens.find(i => !abertasNaLiga.has(chaveLiga(i.set, i.carta)))
 	$('#subtitulo').textContent = `${itens.length} carta${itens.length > 1 ? 's' : ''}${filtrado ? ' (com filtros)' : ''}`
 	conteudo.innerHTML = `
+		<section class="compra-lista">
+			<h2>Mais rápido: Compra por Lista</h2>
+			<p class="dica">A Liga tem a <b>Compra por Lista</b>: você cola todas as cartas de uma vez, ela mostra as lojas de cada uma e você coloca tudo no carrinho.</p>
+			<ol>
+				<li>Toque em <b>Copiar lista e abrir a Liga</b>.</li>
+				<li>Na Liga, cole a lista no campo e busque.</li>
+				<li>Filtre por qualidade <b>NM</b> e lojas do <b>seu estado</b>, e adicione ao carrinho.</li>
+			</ol>
+			<textarea class="busca lista-liga-texto" id="lista-liga-texto" readonly rows="${Math.min(itens.length, 6)}">${escapar(textoDaListaLiga(itens))}</textarea>
+			<label class="opcao-lista"><input type="checkbox" id="lista-com-numero" ${listaComNumero ? 'checked' : ''}> Incluir o número da carta (ex.: 004/094)</label>
+			<a class="botao comprar-liga" id="liga-lista" href="${LIGA_COMPRA_POR_LISTA}" target="_blank" rel="noopener noreferrer">${ICONE_CARRINHO}<span>Copiar lista e abrir a Liga</span></a>
+		</section>
+		<h2 class="titulo-secao">Ou abra carta por carta</h2>
 		<div class="progresso-liga">
 			<div class="barra"><span style="width:${Math.round(abertas / itens.length * 100)}%"></span></div>
 			<p>${abertas} de ${itens.length} aberta${itens.length > 1 ? 's' : ''} na Liga</p>
@@ -1154,6 +1174,14 @@ function desenharComprarNaLiga() {
 		}).join('')}</ul>
 		${abertas ? '<button class="botao secundario" id="liga-recomecar">Recomeçar (desmarcar as abertas)</button>' : ''}`
 
+	$('#liga-lista').addEventListener('click', () => {
+		copiarTexto($('#lista-liga-texto').value).then(ok => avisar(ok ? 'Lista copiada! Cole na Compra por Lista da Liga.' : 'Não deu para copiar: segure no texto da lista e copie.'))
+	})
+	$('#lista-com-numero').addEventListener('change', evento => {
+		listaComNumero = evento.target.checked
+		gravar('colecao-tcg-lista-com-numero', listaComNumero ? '1' : '0')
+		$('#lista-liga-texto').value = textoDaListaLiga(itens)
+	})
 	for (const caixa of conteudo.querySelectorAll('.item-liga-img')) carregarImagem(caixa.querySelector('img'), caixa.dataset.set, caixa.dataset.n, 'low')
 	// Ao abrir uma carta na Liga, marca como aberta (o link abre normalmente em outra janela).
 	for (const link of conteudo.querySelectorAll('a[data-chave]')) {

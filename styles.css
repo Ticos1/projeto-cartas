@@ -923,3 +923,12 @@ a.botao { text-align: center; text-decoration: none; }
 .passo p { margin: 0 0 6px; font-size: .9rem; line-height: 1.45; color: var(--texto-fraco); }
 .passo p:last-child { margin-bottom: 0; }
 .passo b { color: var(--texto); }
+
+/* ---------- Compra por Lista (Liga) ---------- */
+.compra-lista { background: var(--superficie); border: 1px solid var(--borda); border-radius: 14px; padding: 14px; margin-bottom: 18px; }
+.compra-lista h2 { margin: 0 0 6px; font-size: 1.02rem; }
+.compra-lista ol { margin: 6px 0 10px; padding-left: 20px; font-size: .88rem; color: var(--texto-fraco); }
+.compra-lista ol b, .compra-lista .dica b { color: var(--texto); }
+.lista-liga-texto { width: 100%; resize: vertical; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .8rem; line-height: 1.4; }
+.opcao-lista { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; font-size: .85rem; color: var(--texto-fraco); }
+.compra-lista .botao.comprar-liga { margin: 10px 0 0; }

@@ -162,7 +162,7 @@ Aba **Configurações** (☰ ou ⋮ → "Temas, modo claro/escuro e logs").
 - Segure uma carta; quando ela termina de girar, aparece uma **estrela** no canto superior direito. Tocar na estrela põe (ou tira) a carta da **Lista de Desejos**.
 - A aba **Lista de Desejos** (☰) mostra essas cartas, com filtro de coleção e de raridade. Cartas da lista ganham uma estrelinha amarela na grade.
 - A lista fica salva no aparelho e sincroniza pela conta (campo `desejos` do documento no Firestore) e entra no backup.
-- **Comprar na Liga**: na Lista de Desejos, o botão "Comprar na Liga Pokémon" abre uma lista das cartas desejadas que você ainda não tem (respeitando os filtros). "Abrir próxima" abre a carta na Liga, onde você filtra NM e uma loja do seu estado; o app marca quais já foram abertas e mostra o progresso. (A Liga não permite montar o carrinho automaticamente.)
+- **Comprar na Liga**: além de abrir carta por carta, a tela tem a **Compra por Lista**: o app copia a lista ("1 Nome (número/total)") e abre a Compra por Lista da Liga, onde você cola, filtra NM/estado e põe tudo no carrinho. Na Lista de Desejos, o botão "Comprar na Liga Pokémon" abre uma lista das cartas desejadas que você ainda não tem (respeitando os filtros). "Abrir próxima" abre a carta na Liga, onde você filtra NM e uma loja do seu estado; o app marca quais já foram abertas e mostra o progresso. (A Liga não permite montar o carrinho automaticamente.)
 
 ## Séries incluídas
 **Megaevolução** (9 coleções), **Escarlate e Violeta** (19) e **Espada e Escudo** (26): 54 coleções e cerca de 8.600 cartas. Na aba Coleções e no filtro de coleção elas aparecem agrupadas por série.
