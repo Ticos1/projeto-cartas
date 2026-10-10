@@ -932,3 +932,7 @@ a.botao { text-align: center; text-decoration: none; }
 .lista-liga-texto { width: 100%; resize: vertical; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .8rem; line-height: 1.4; }
 .opcao-lista { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; font-size: .85rem; color: var(--texto-fraco); }
 .compra-lista .botao.comprar-liga { margin: 10px 0 0; }
+
+/* ---------- Espaço para o banner de anúncio (app Android) ---------- */
+html.com-anuncio main { padding-bottom: calc(var(--altura-anuncio, 60px) + 32px); }
+html.com-anuncio .aviso { bottom: calc(var(--altura-anuncio, 60px) + 20px + env(safe-area-inset-bottom)); }

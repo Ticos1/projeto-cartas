@@ -16,7 +16,7 @@ const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v34'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v35'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -1340,7 +1340,8 @@ const PASSOS_TUTORIAL = [
 		'Em <b>Configurações → Logs</b> ficam os erros do app; se algo der errado, use <b>Compartilhar</b> e mande para quem for te ajudar.'] },
 	{ icone: '⋮', titulo: 'Menu de três pontinhos', texto: [
 		'<b>Backup</b>: exporte sua coleção para um arquivo e importe de volta quando quiser.',
-		'<b>App Android</b>: o app avisa quando há uma versão nova e se atualiza sozinho; use <b>Procurar atualização</b> para conferir.'] },
+		'<b>App Android</b>: o app avisa quando há uma versão nova e se atualiza sozinho; use <b>Procurar atualização</b> para conferir.',
+		'No app Android aparece um anúncio pequeno no rodapé: é ele que ajuda a manter o Ticards de graça.'] },
 ]
 
 function telaComoUsar() {
@@ -1685,6 +1686,7 @@ function navegar() {
 	else if (aba === 'configuracoes') telaConfiguracoes(sub)
 	else telaPesquisa()
 	marcarAbaNaGaveta(aba)
+	atualizarAnuncio()
 	window.scrollTo(0, 0)
 }
 
@@ -2268,6 +2270,51 @@ function configurarSecaoApk() {
 	}
 }
 
+/* ---------- Anúncio (só no app Android, com o AdMob do Google) ---------- */
+// Um banner pequeno no rodapé. Some quando a carta grande, o menu, a gaveta ou uma lista de escolha
+// estão abertos (para não cobrir botões) e na tela de boas-vindas (Como usar o app).
+// IDs de TESTE do Google: troque "banner" pelo ID do seu bloco de anúncios e "teste" para false.
+const ANUNCIO = { banner: 'ca-app-pub-3940256099942544/9214589741', teste: true }
+const pluginAnuncio = () => window.Capacitor?.isNativePlatform?.() ? window.Capacitor.Plugins?.AdMob || null : null
+const estadoAnuncio = { iniciado: false, mostrando: false, criado: false }
+
+async function iniciarAnuncio() {
+	const admob = pluginAnuncio()
+	if (!admob) return   // navegador ou APK antigo (sem a peça de anúncios)
+	try {
+		await admob.initialize({ initializeForTesting: ANUNCIO.teste })
+		admob.addListener('bannerAdSizeChanged', tamanho => {
+			document.documentElement.style.setProperty('--altura-anuncio', `${Math.ceil(tamanho?.height || 0)}px`)
+		})
+		admob.addListener('bannerAdFailedToLoad', erro => registrar('aviso', 'Anúncio não carregou', erro?.message || textoDe(erro)))
+		estadoAnuncio.iniciado = true
+		const observador = new MutationObserver(atualizarAnuncio)
+		for (const id of ['#zoom', '#menu', '#escolha', '#gaveta']) observador.observe($(id), { attributes: true, attributeFilter: ['hidden'] })
+		atualizarAnuncio()
+	} catch (erro) {
+		registrar('aviso', 'Anúncios indisponíveis', textoDe(erro))
+	}
+}
+
+function atualizarAnuncio() {
+	const admob = pluginAnuncio()
+	if (!admob || !estadoAnuncio.iniciado) return
+	const sobreposicao = ['#zoom', '#menu', '#escolha', '#gaveta'].some(id => !$(id).hidden)
+	const mostrar = !sobreposicao && rotaAtual().aba !== 'ajuda'
+	if (mostrar === estadoAnuncio.mostrando) return
+	estadoAnuncio.mostrando = mostrar
+	document.documentElement.classList.toggle('com-anuncio', mostrar)
+	if (!mostrar) { admob.hideBanner().catch(() => {}); return }
+	const pedido = estadoAnuncio.criado
+		? admob.resumeBanner()
+		: admob.showBanner({ adId: ANUNCIO.banner, position: 'BOTTOM_CENTER', adSize: 'ADAPTIVE_BANNER', isTesting: ANUNCIO.teste })
+	pedido.then(() => { estadoAnuncio.criado = true }).catch(erro => {
+		estadoAnuncio.mostrando = false
+		document.documentElement.classList.remove('com-anuncio')
+		registrar('aviso', 'Anúncio não apareceu', textoDe(erro))
+	})
+}
+
 /* ---------- Início ---------- */
 async function iniciar() {
 	const rotuloVersao = $('#versao-app')
@@ -2289,6 +2336,7 @@ async function iniciar() {
 	navegar()
 	window.__appPronto = true
 	carregarNuvem()
+	iniciarAnuncio()
 	verificarVersaoDoApp()
 
 	if ('serviceWorker' in navigator) {
