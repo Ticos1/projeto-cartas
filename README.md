@@ -182,8 +182,8 @@ Em **Coleções**, o botão **Escolher coleções** abre uma lista com um interr
 Aba **Como usar o app** (primeira do menu ☰): um guia passo a passo de todas as funções. Ela é a tela que aparece sempre que o app é aberto; o botão **Começar a usar** leva para a Pesquisa.
 
 ## Anúncios (AdMob, só no app Android)
-- Um banner pequeno no rodapé. Some quando a carta grande, o menu ⋮, a gaveta ☰ ou uma lista de escolha estão abertos, e na tela "Como usar o app". O site (PC) não tem anúncio.
+- Um quadrado (300×250, "Publicidade") que aparece **só com a gaveta ☰ aberta**, no espaço vazio embaixo das abas. Com a gaveta fechada não há anúncio. Em telas baixas, onde não cabe, não aparece. O site (PC) não tem anúncio.
 - Hoje estão os **IDs de teste do Google** (aparece "Test Ad"). Para ganhar dinheiro, crie uma conta no AdMob e troque:
   - o **ID do app** em `android-app/android/app/src/main/AndroidManifest.xml` (`com.google.android.gms.ads.APPLICATION_ID`) — precisa gerar APK novo;
-  - o **ID do bloco de anúncios (banner)** e `teste: false` na constante `ANUNCIO` do `app.js` — muda pelo site, sem APK novo.
+  - o **ID do bloco de anúncios (banner)** em `bloco` e `teste: false` na constante `ANUNCIO` do `app.js` — muda pelo site, sem APK novo.
 - O AdMob usa o ID de publicidade do aparelho; é preciso ter uma política de privacidade publicada para usar anúncios de verdade.

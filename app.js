@@ -16,7 +16,7 @@ const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v35'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v36'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -1341,7 +1341,7 @@ const PASSOS_TUTORIAL = [
 	{ icone: '⋮', titulo: 'Menu de três pontinhos', texto: [
 		'<b>Backup</b>: exporte sua coleção para um arquivo e importe de volta quando quiser.',
 		'<b>App Android</b>: o app avisa quando há uma versão nova e se atualiza sozinho; use <b>Procurar atualização</b> para conferir.',
-		'No app Android aparece um anúncio pequeno no rodapé: é ele que ajuda a manter o Ticards de graça.'] },
+		'No app Android, ao abrir a gaveta ☰ aparece um anúncio no espaço vazio embaixo das abas: é ele que ajuda a manter o Ticards de graça.'] },
 ]
 
 function telaComoUsar() {
@@ -1686,7 +1686,6 @@ function navegar() {
 	else if (aba === 'configuracoes') telaConfiguracoes(sub)
 	else telaPesquisa()
 	marcarAbaNaGaveta(aba)
-	atualizarAnuncio()
 	window.scrollTo(0, 0)
 }
 
@@ -2271,48 +2270,67 @@ function configurarSecaoApk() {
 }
 
 /* ---------- Anúncio (só no app Android, com o AdMob do Google) ---------- */
-// Um banner pequeno no rodapé. Some quando a carta grande, o menu, a gaveta ou uma lista de escolha
-// estão abertos (para não cobrir botões) e na tela de boas-vindas (Como usar o app).
-// IDs de TESTE do Google: troque "banner" pelo ID do seu bloco de anúncios e "teste" para false.
-const ANUNCIO = { banner: 'ca-app-pub-3940256099942544/9214589741', teste: true }
+// Um quadrado (300×250) que aparece só com a gaveta ☰ aberta, no espaço vazio abaixo das abas.
+// Com a gaveta fechada não há anúncio nenhum na tela. Se a tela for baixa e não couber, não mostra.
+// IDs de TESTE do Google: troque "bloco" pelo ID do seu bloco de anúncios e "teste" para false.
+const ANUNCIO = { bloco: 'ca-app-pub-3940256099942544/6300978111', teste: true, largura: 300, altura: 250, margem: 16 }
 const pluginAnuncio = () => window.Capacitor?.isNativePlatform?.() ? window.Capacitor.Plugins?.AdMob || null : null
-const estadoAnuncio = { iniciado: false, mostrando: false, criado: false }
+const estadoAnuncio = { iniciado: false, mostrando: false, criado: false, espera: 0 }
 
 async function iniciarAnuncio() {
 	const admob = pluginAnuncio()
 	if (!admob) return   // navegador ou APK antigo (sem a peça de anúncios)
 	try {
 		await admob.initialize({ initializeForTesting: ANUNCIO.teste })
-		admob.addListener('bannerAdSizeChanged', tamanho => {
-			document.documentElement.style.setProperty('--altura-anuncio', `${Math.ceil(tamanho?.height || 0)}px`)
-		})
 		admob.addListener('bannerAdFailedToLoad', erro => registrar('aviso', 'Anúncio não carregou', erro?.message || textoDe(erro)))
 		estadoAnuncio.iniciado = true
-		const observador = new MutationObserver(atualizarAnuncio)
-		for (const id of ['#zoom', '#menu', '#escolha', '#gaveta']) observador.observe($(id), { attributes: true, attributeFilter: ['hidden'] })
-		atualizarAnuncio()
+		new MutationObserver(atualizarAnuncio).observe($('#gaveta'), { attributes: true, attributeFilter: ['hidden'] })
 	} catch (erro) {
 		registrar('aviso', 'Anúncios indisponíveis', textoDe(erro))
 	}
 }
 
+// Cabe o quadrado entre a última aba da gaveta e o rodapé da tela?
+function anuncioCabeNaGaveta() {
+	const caixa = $('#gaveta-anuncio')
+	const ultimaAba = [...document.querySelectorAll('.gaveta-item')].pop()
+	if (!caixa || !ultimaAba) return false
+	caixa.hidden = false
+	const cabe = caixa.getBoundingClientRect().top - 24 > ultimaAba.getBoundingClientRect().bottom
+	caixa.hidden = !cabe
+	return cabe
+}
+
 function atualizarAnuncio() {
 	const admob = pluginAnuncio()
 	if (!admob || !estadoAnuncio.iniciado) return
-	const sobreposicao = ['#zoom', '#menu', '#escolha', '#gaveta'].some(id => !$(id).hidden)
-	const mostrar = !sobreposicao && rotaAtual().aba !== 'ajuda'
-	if (mostrar === estadoAnuncio.mostrando) return
-	estadoAnuncio.mostrando = mostrar
-	document.documentElement.classList.toggle('com-anuncio', mostrar)
-	if (!mostrar) { admob.hideBanner().catch(() => {}); return }
-	const pedido = estadoAnuncio.criado
-		? admob.resumeBanner()
-		: admob.showBanner({ adId: ANUNCIO.banner, position: 'BOTTOM_CENTER', adSize: 'ADAPTIVE_BANNER', isTesting: ANUNCIO.teste })
-	pedido.then(() => { estadoAnuncio.criado = true }).catch(erro => {
-		estadoAnuncio.mostrando = false
-		document.documentElement.classList.remove('com-anuncio')
-		registrar('aviso', 'Anúncio não apareceu', textoDe(erro))
-	})
+	clearTimeout(estadoAnuncio.espera)
+	const aberta = !$('#gaveta').hidden
+	if (!aberta) {
+		$('#gaveta-anuncio').hidden = true
+		if (estadoAnuncio.mostrando) { estadoAnuncio.mostrando = false; admob.hideBanner().catch(() => {}) }
+		return
+	}
+	// Se couber, a gaveta fica um pouco mais larga (o AdMob centraliza o quadrado na tela).
+	const cabe = anuncioCabeNaGaveta()
+	document.documentElement.classList.toggle('com-anuncio', cabe)
+	if (!cabe) return
+	// Espera a gaveta terminar de deslizar para o quadrado aparecer já no lugar.
+	estadoAnuncio.espera = setTimeout(() => {
+		if ($('#gaveta').hidden || estadoAnuncio.mostrando) return
+		estadoAnuncio.mostrando = true
+		const pedido = estadoAnuncio.criado
+			? admob.resumeBanner()
+			: admob.showBanner({ adId: ANUNCIO.bloco, adSize: 'MEDIUM_RECTANGLE', position: 'BOTTOM_CENTER', margin: ANUNCIO.margem, isTesting: ANUNCIO.teste })
+		pedido.then(() => {
+			estadoAnuncio.criado = true
+			if ($('#gaveta').hidden) { estadoAnuncio.mostrando = false; admob.hideBanner().catch(() => {}) }
+		}).catch(erro => {
+			estadoAnuncio.mostrando = false
+			$('#gaveta-anuncio').hidden = true
+			registrar('aviso', 'Anúncio não apareceu', textoDe(erro))
+		})
+	}, semAnimacao() ? 0 : 240)
 }
 
 /* ---------- Início ---------- */
