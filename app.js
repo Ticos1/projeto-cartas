@@ -17,7 +17,7 @@ const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v39'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v40'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -1324,11 +1324,37 @@ function desenharPesquisa() {
 		}
 	}
 
+	// Cartas que combinam, mas estão em coleções que o usuário escondeu: avisa e deixa mostrar de novo.
+	const escondidasAchadas = new Map()
+	if (escondidas.size && (texto || pesquisa.raridade || pesquisa.status !== 'todas')) {
+		for (const set of dados.sets) {
+			if (colecaoVisivel(set)) continue
+			for (const carta of cartasDoSet(set)) {
+				if (pesquisa.raridade && carta.raridade !== pesquisa.raridade) continue
+				const marcada = tenho(set.id, carta.n)
+				if (pesquisa.status === 'faltam' && marcada) continue
+				if (pesquisa.status === 'tenho' && !marcada) continue
+				if (combina(carta, texto)) escondidasAchadas.set(set.id, (escondidasAchadas.get(set.id) || 0) + 1)
+			}
+		}
+	}
+	const avisoEscondidas = escondidasAchadas.size ? `<div class="aviso-escondidas">
+		<p>Também há cartas assim em coleções que você escondeu: <b>${[...escondidasAchadas.keys()].slice(0, 4).map(id => escapar(dados.sets.find(s => s.id === id).nome)).join(', ')}${escondidasAchadas.size > 4 ? ` e mais ${escondidasAchadas.size - 4}` : ''}</b>.</p>
+		<button class="botao secundario" id="mostrar-escondidas">Mostrar ${escondidasAchadas.size > 1 ? 'essas coleções' : 'essa coleção'}</button>
+	</div>` : ''
+	const ligarAvisoEscondidas = () => $('#mostrar-escondidas')?.addEventListener('click', () => {
+		definirEscondidas([...escondidasAchadas.keys()], false)
+		atualizarSeletorSet()
+		desenharPesquisa()
+	})
+
 	if (!itens.length) {
-		conteudo.innerHTML = '<p class="vazio">Nenhuma carta encontrada.</p>'
+		conteudo.innerHTML = `<p class="vazio">Nenhuma carta encontrada.</p>${avisoEscondidas}`
+		ligarAvisoEscondidas()
 		return
 	}
-	conteudo.innerHTML = `<h2 class="titulo-secao">${itens.length} carta${itens.length > 1 ? 's' : ''} encontrada${itens.length > 1 ? 's' : ''}</h2>`
+	conteudo.innerHTML = `<h2 class="titulo-secao">${itens.length} carta${itens.length > 1 ? 's' : ''} encontrada${itens.length > 1 ? 's' : ''}</h2>${avisoEscondidas}`
+	ligarAvisoEscondidas()
 	conteudo.appendChild(montarGrade(itens.slice(0, pesquisa.limite), true))
 	if (itens.length > pesquisa.limite) {
 		const mais = document.createElement('button')

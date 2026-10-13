@@ -981,3 +981,8 @@ html.com-anuncio .gaveta { width: min(100vw, calc(50vw + 170px)); }
 .avisos-deck { margin: 10px 0 0; padding-left: 18px; color: #e0a020; font-size: .85rem; }
 .deck-ok { margin: 10px 0 0; color: var(--ok); font-weight: 600; font-size: .9rem; }
 .lista-deck .dica { padding: 4px 6px; }
+
+.aviso-escondidas { margin: 4px 0 12px; padding: 12px 14px; background: var(--superficie); border: 1px dashed var(--borda); border-radius: 12px; font-size: .88rem; }
+.aviso-escondidas p { margin: 0 0 8px; color: var(--texto-fraco); }
+.aviso-escondidas b { color: var(--texto); }
+.aviso-escondidas .botao { margin: 0; padding: 10px; }
