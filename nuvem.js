@@ -3,11 +3,23 @@
 // salva no aparelho.
 //
 // No Firebase, cada usuário tem um documento colecoes/{id-do-usuário}:
-//   { cartas: { me01: ['001', '005'], ... }, atualizadoEm }
+//   { cartas: { me01: ['001', '005'], ... }, quantidades, desejos, decks, colecoesEscondidas, semMasterSet, atualizadoEm }
+// O formato e os limites desse documento ficam em firestore.rules (testado em tests/regras/).
 
 import { juntar, juntarQuantidades } from './sincronia.js'
 
-const SDK = 'https://www.gstatic.com/firebasejs/11.10.0'
+// O Firebase vem do próprio site (lib/, copiado por scripts/copiar_bibliotecas.mjs), não da gstatic.com.
+// A pasta leva a versão no nome (bibliotecas/package.json); os testes conferem que batem.
+const SDK = new URL('./lib/firebase-11.10.0', import.meta.url).href
+
+// App Check (reCAPTCHA v3): só deixa o app de verdade usar o Firebase, não scripts com a apiKey.
+// Chave do site criada em https://www.google.com/recaptcha/admin (tipo "reCAPTCHA v3", domínio ticos1.github.io)
+// e registrada no Firebase (App Check → Apps). Vazia = App Check desligado.
+const APP_CHECK_CHAVE_SITE = ''
+
+// Mínimo de caracteres da senha ao criar a conta (o padrão do Firebase é 6). A mesma regra deve estar na
+// política de senha do Firebase (Authentication → Configurações → Política de senha), que vale também fora do app.
+export const SENHA_MINIMA = 8
 
 const firebaseConfig = {
 	apiKey: 'AIzaSyB145m5SRB0N4g8J_W1lOOuyt_SnCu7kNo',
@@ -25,6 +37,20 @@ const [appSdk, authSdk, dbSdk] = await Promise.all([
 ])
 
 const app = appSdk.initializeApp(firebaseConfig)
+if (APP_CHECK_CHAVE_SITE) {
+	try {
+		// No computador de quem desenvolve (localhost), usa um token de depuração (aparece no console;
+		// cadastre em App Check → Apps → Gerenciar tokens de depuração).
+		if (['localhost', '127.0.0.1'].includes(location.hostname)) self.FIREBASE_APPCHECK_DEBUG_TOKEN = true
+		const appCheckSdk = await import(`${SDK}/firebase-app-check.js`)
+		appCheckSdk.initializeAppCheck(app, {
+			provider: new appCheckSdk.ReCaptchaV3Provider(APP_CHECK_CHAVE_SITE),
+			isTokenAutoRefreshEnabled: true,
+		})
+	} catch (erro) {
+		console.warn('App Check indisponível:', erro)
+	}
+}
 const auth = authSdk.getAuth(app)
 auth.languageCode = 'pt-BR'
 
@@ -46,7 +72,9 @@ const MENSAGENS = {
 	'auth/invalid-email': 'E-mail inválido.',
 	'auth/missing-email': 'Digite o e-mail.',
 	'auth/missing-password': 'Digite a senha.',
-	'auth/weak-password': 'A senha precisa ter pelo menos 6 caracteres.',
+	'auth/weak-password': `A senha precisa ter pelo menos ${SENHA_MINIMA} caracteres.`,
+	'auth/password-does-not-meet-requirements': `A senha não segue as regras: use pelo menos ${SENHA_MINIMA} caracteres, com letras e números. Se a sua senha antiga for mais curta, toque em "Esqueci minha senha" para criar uma nova.`,
+	'auth/firebase-app-check-token-is-invalid': 'O app não conseguiu se identificar. Recarregue a página e tente de novo.',
 	'auth/email-already-in-use': 'Já existe uma conta com esse e-mail. Use "Entrar".',
 	'auth/invalid-credential': 'E-mail ou senha incorretos.',
 	'auth/wrong-password': 'E-mail ou senha incorretos.',
@@ -57,7 +85,7 @@ const MENSAGENS = {
 }
 
 export function mensagemDeErro(erro) {
-	return MENSAGENS[erro?.code] || 'Não deu certo. Tente de novo.'
+	return erro?.mensagem || MENSAGENS[erro?.code] || 'Não deu certo. Tente de novo.'
 }
 
 // opcoes: { colecaoLocal(), aoMudarUsuario(usuario), aoReceberColecao(cartas, semMasterSet), aoMudarStatus(status) }
@@ -68,7 +96,7 @@ export function iniciarNuvem(opcoes) {
 		pararDeOuvir?.()
 		pararDeOuvir = null
 		documento = null
-		avisos.aoMudarUsuario(usuario ? { email: usuario.email } : null)
+		avisos.aoMudarUsuario(usuario ? { email: usuario.email, verificado: usuario.emailVerified } : null)
 		if (!usuario) { avisos.aoMudarStatus('desconectado'); return }
 
 		avisos.aoMudarStatus('sincronizando')
@@ -106,7 +134,45 @@ export function iniciarNuvem(opcoes) {
 }
 
 export const entrar = (email, senha) => authSdk.signInWithEmailAndPassword(auth, email, senha)
-export const criarConta = (email, senha) => authSdk.createUserWithEmailAndPassword(auth, email, senha)
+
+// Regras da senha nova: o mínimo do app, mais a política de senha do Firebase (se estiver configurada).
+// Devolve o texto do problema ou '' se a senha serve.
+export async function problemaNaSenha(senha) {
+	if (senha.length < SENHA_MINIMA) return `A senha precisa ter pelo menos ${SENHA_MINIMA} caracteres.`
+	if (!/[a-zA-Z\u00C0-\u024F]/.test(senha) || !/\d/.test(senha)) return 'Use letras e números na senha.'
+	try {
+		const estado = await authSdk.validatePassword(auth, senha)
+		if (!estado.isValid) {
+			const faltas = []
+			if (estado.meetsMinPasswordLength === false) faltas.push(`pelo menos ${estado.passwordPolicy.customStrengthOptions.minPasswordLength} caracteres`)
+			if (estado.containsLowercaseLetter === false) faltas.push('uma letra minúscula')
+			if (estado.containsUppercaseLetter === false) faltas.push('uma letra maiúscula')
+			if (estado.containsNumericCharacter === false) faltas.push('um número')
+			if (estado.containsNonAlphanumericCharacter === false) faltas.push('um símbolo (ex.: ! ? @)')
+			return `A senha precisa ter ${faltas.join(', ') || 'mais caracteres'}.`
+		}
+	} catch { /* sem internet ou sem política: vale a regra do app; o Firebase confere de novo ao criar */ }
+	return ''
+}
+
+// Cria a conta e já manda o e-mail de confirmação do endereço.
+export async function criarConta(email, senha) {
+	const problema = await problemaNaSenha(senha)
+	if (problema) throw Object.assign(new Error(problema), { code: 'app/senha-fraca', mensagem: problema })
+	const { user } = await authSdk.createUserWithEmailAndPassword(auth, email, senha)
+	try { await authSdk.sendEmailVerification(user) } catch (erro) { console.warn('Não foi possível enviar a confirmação de e-mail:', erro) }
+}
+
+// Confirmação do e-mail (opcional): reenviar e conferir se a pessoa já clicou no link.
+export async function reenviarConfirmacao() {
+	if (!auth.currentUser) throw new Error('sem usuário')
+	await authSdk.sendEmailVerification(auth.currentUser)
+}
+export async function emailConfirmado() {
+	if (!auth.currentUser) return false
+	await authSdk.reload(auth.currentUser)
+	return auth.currentUser.emailVerified
+}
 export const recuperarSenha = email => authSdk.sendPasswordResetEmail(auth, email)
 // Ao sair, a próxima entrada neste aparelho junta de novo o que for marcado enquanto deslogado.
 export async function sair() {

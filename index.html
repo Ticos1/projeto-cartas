@@ -2,6 +2,10 @@
 <html lang="pt-BR">
 <head>
 	<meta charset="utf-8">
+	<!-- Content-Security-Policy: segunda linha de defesa caso algum texto entre na página sem escapar().
+	     Só roda script do próprio site (e o reCAPTCHA do App Check); o Firebase e o Tesseract vêm de lib/.
+	     Ao usar um endereço externo novo no app, inclua-o aqui (os testes conferem a lista). -->
+	<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://assets.tcgdex.net; connect-src 'self' https://assets.tcgdex.net https://api.github.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebaseinstallations.googleapis.com https://firebaseappcheck.googleapis.com https://content-firebaseappcheck.googleapis.com; frame-src https://www.google.com/recaptcha/ https://recaptcha.google.com/recaptcha/ https://colecao-tcg-3bd8b.firebaseapp.com; worker-src 'self'; media-src 'self' blob:; font-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 	<title>Ticards</title>
 	<meta name="description" content="Controle da sua coleção de cartas Pokémon TCG da série Megaevolução.">
@@ -99,7 +103,8 @@
 					<p class="dica">Entre para sincronizar sua coleção entre o celular e o PC.</p>
 					<form id="form-login">
 						<input class="busca campo" id="login-email" type="email" placeholder="E-mail" autocomplete="email" required>
-						<input class="busca campo" id="login-senha" type="password" placeholder="Senha (mínimo 6 caracteres)" autocomplete="current-password" minlength="6" required>
+						<input class="busca campo" id="login-senha" type="password" placeholder="Senha" autocomplete="current-password" required>
+						<p class="dica" id="login-regra-senha">Para criar a conta: senha com pelo menos 8 caracteres, com letras e números.</p>
 						<p class="erro" id="login-erro" role="alert"></p>
 						<button class="botao" type="submit" id="botao-entrar">Entrar</button>
 						<button class="botao secundario" type="button" id="botao-criar">Criar conta</button>
@@ -109,6 +114,11 @@
 				<div id="conta-conectado" hidden>
 					<p class="dica">Conectado como <b id="conta-email"></b></p>
 					<p class="dica" id="conta-status"></p>
+					<div id="conta-confirmar" hidden>
+						<p class="dica">📧 Confirme seu e-mail pelo link que enviamos (veja também a caixa de spam). Assim dá para recuperar a conta se esquecer a senha.</p>
+						<button class="botao secundario" type="button" id="botao-ja-confirmei">Já confirmei</button>
+						<button class="link" type="button" id="botao-reenviar-confirmacao">Reenviar o e-mail de confirmação</button>
+					</div>
 					<button class="botao secundario" id="botao-sair">Sair da conta</button>
 					<button class="link perigo" type="button" id="botao-excluir-conta">Excluir minha conta</button>
 					<form id="form-excluir" hidden>
@@ -200,37 +210,7 @@
 
 	<div class="aviso" id="aviso" role="status" aria-live="polite"></div>
 
-		<!-- Rede de segurança: se o app não conseguir iniciar (ex.: arquivos de versões misturadas),
-	     mostra um botão que limpa os arquivos guardados do app e recarrega. A coleção NÃO é apagada. -->
-	<script>
-	(function () {
-		function reparar() {
-			var passo = function (p) { return Promise.resolve(p).catch(function () {}) }
-			passo(navigator.serviceWorker && navigator.serviceWorker.getRegistrations().then(function (rs) {
-				return Promise.all(rs.map(function (r) { return r.unregister() }))
-			})).then(function () {
-				return passo(window.caches && caches.keys().then(function (ks) {
-					return Promise.all(ks.map(function (k) { return caches.delete(k) }))
-				}))
-			}).then(function () {
-				// Baixa de novo os arquivos do app, ignorando a memória do navegador (que guarda por 10 min).
-				var arquivos = ['index.html', 'styles.css', 'js/00-base.js', 'js/10-modelo.js', 'js/20-imagens-ajudantes.js', 'js/21-trocas-logica.js', 'js/22-importar-deck-logica.js', 'js/23-reconhecer-logica.js', 'js/24-imagem-logica.js', 'js/30-cartas-grade.js', 'js/35-efeitos.js', 'js/40-liga-e-carta-grande.js', 'js/50-aba-colecoes.js', 'js/51-aba-pesquisa.js', 'js/52-aba-desejos.js', 'js/53-aba-decks.js', 'js/54-aba-ajuda-config.js', 'js/55-tela-set.js', 'js/56-aba-trocas.js', 'js/57-aba-escanear.js', 'js/60-navegacao.js', 'js/61-menu-backup.js', 'js/62-tema.js', 'js/63-conta.js', 'js/70-app-android.js', 'js/71-anuncio.js', 'js/99-iniciar.js', 'nuvem.js', 'sincronia.js', 'sw.js', 'data/cartas.json', 'manifest.webmanifest']
-				return Promise.all(arquivos.map(function (a) { return passo(fetch(a, { cache: 'reload' })) }))
-			}).then(function () { location.reload() })
-		}
-		function mostrar() {
-			if (window.__appPronto || document.getElementById('reparo')) return
-			var caixa = document.createElement('div')
-			caixa.id = 'reparo'
-			caixa.style.cssText = 'position:fixed;inset:0;z-index:99;display:grid;place-items:center;padding:24px;background:#14161c;color:#eef0f4;font-family:system-ui,sans-serif;text-align:center'
-			caixa.innerHTML = '<div><h2>O app não abriu direito</h2><p style="color:#9aa1ad">Isso acontece quando uma atualização fica pela metade. Sua coleção está salva e não será apagada.</p><button id="reparar" style="padding:12px 24px;border:0;border-radius:12px;background:#f0524a;color:#fff;font:inherit;font-weight:600">Reparar e abrir</button></div>'
-			document.body.appendChild(caixa)
-			document.getElementById('reparar').onclick = reparar
-		}
-		window.addEventListener('error', function () { setTimeout(mostrar, 400) })
-		setTimeout(mostrar, 8000)
-	})()
-	</script>
+	<script src="js/reparo.js"></script>
 	<script src="js/00-base.js"></script>
 	<script src="js/10-modelo.js"></script>
 	<script src="js/20-imagens-ajudantes.js"></script>

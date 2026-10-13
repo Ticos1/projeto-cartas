@@ -24,6 +24,7 @@ function mostrarUsuario(novo) {
 	$('#conta-desconectado').hidden = !!usuario
 	$('#conta-conectado').hidden = !usuario
 	$('#conta-email').textContent = usuario?.email || ''
+	$('#conta-confirmar').hidden = !usuario || !!usuario.verificado
 	if ($('#convite')) $('#convite').hidden = !!usuario
 	if (entrou && !$('#menu').hidden) {
 		fecharMenu()
@@ -63,7 +64,8 @@ function receberColecao(cartas, semMaster = [], desejosNuvem = {}, escondidasNuv
 
 async function carregarNuvem() {
 	try {
-		nuvem = await import('./nuvem.js')
+		// O endereço é relativo a este arquivo (js/), não à página.
+		nuvem = await import('../nuvem.js')
 	} catch (erro) {
 		console.warn('Login indisponível:', erro)
 		$('#conta-carregando').hidden = true
@@ -107,7 +109,31 @@ $('#form-login').addEventListener('submit', evento => {
 
 $('#botao-criar').addEventListener('click', () => {
 	if (!$('#form-login').reportValidity()) return
-	acaoDeConta(() => nuvem.criarConta(emailDigitado(), $('#login-senha').value))
+	acaoDeConta(async () => {
+		await nuvem.criarConta(emailDigitado(), $('#login-senha').value)
+		avisar('Conta criada! Enviamos um e-mail para você confirmar o endereço.')
+	})
+})
+
+// Confirmação do e-mail: opcional, mas ajuda a recuperar a conta.
+$('#botao-reenviar-confirmacao').addEventListener('click', async () => {
+	try {
+		await nuvem.reenviarConfirmacao()
+		avisar('Enviamos de novo o e-mail de confirmação.')
+	} catch (erro) {
+		avisar(nuvem.mensagemDeErro(erro))
+	}
+})
+$('#botao-ja-confirmei').addEventListener('click', async () => {
+	try {
+		const confirmado = await nuvem.emailConfirmado()
+		if (usuario) usuario.verificado = confirmado
+		$('#conta-confirmar').hidden = confirmado
+		avisar(confirmado ? 'E-mail confirmado. Obrigado!' : 'Ainda não aparece como confirmado. Abra o link do e-mail e tente de novo.')
+		if (confirmado) registrar('info', 'E-mail confirmado')
+	} catch (erro) {
+		avisar(nuvem.mensagemDeErro(erro))
+	}
 })
 
 $('#botao-esqueci').addEventListener('click', () => {
