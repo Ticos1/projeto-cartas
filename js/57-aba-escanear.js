@@ -77,13 +77,24 @@ async function reconhecerFoto(origem, aoProgresso) {
 	const trabalhador = await prepararLeitor()
 	const foto = origem instanceof Blob ? await abrirImagemDaFoto(origem) : origem   // arquivo da foto ou quadro da câmera
 	aoProgresso('Lendo a carta…')
-	let texto = await lerTexto(trabalhador, recorteDaFoto(foto, 0, 0, 1, 1, 1400, false), '3')   // o leitor lê melhor com letras grandes: amplia fotos pequenas
-	let achadas = reconhecerCartas(texto)
-	if (!achadas.length || achadas[0].pontos < 10) {
-		aoProgresso('Lendo com mais cuidado…')
-		texto += '\n' + await lerTexto(trabalhador, recorteDaFoto(foto, 0, 0.9, 1, 1, 1800, true), '6')
-		texto += '\n' + await lerTexto(trabalhador, recorteDaFoto(foto, 0.05, 0.02, 0.8, 0.12, 1200, true), '7')
+	// Cada leitura enxerga coisas diferentes (testado com cartas reais: nenhuma sozinha acerta sempre), então
+	// tentamos várias, da mais certeira para a menos, e paramos quando número + total do set baterem com uma carta.
+	// [x0, y0, x1, y1, largura, realce, modo]: a região é em frações da imagem; o modo é o do Tesseract (3 = página, 6 = bloco, 7 = linha, 11 = texto solto).
+	const LEITURAS = [
+		[0, 0.86, 0.6, 1, 2400, true, '11'],     // canto de baixo à esquerda: onde fica o número
+		[0, 0.86, 1, 1, 2400, true, '11'],       // rodapé inteiro
+		[0, 0.84, 1, 1, 2400, true, '11'],       // rodapé um pouco mais alto
+		[0, 0.88, 1, 1, 2000, true, '6'],        // rodapé como bloco
+		[0, 0, 1, 1, 1400, false, '3'],          // carta inteira (traz o nome)
+		[0.05, 0.02, 0.8, 0.12, 1200, true, '7'], // faixa do nome
+	]
+	let texto = ''
+	let achadas = []
+	for (const [x0, y0, x1, y1, largura, realce, modo] of LEITURAS) {
+		texto += '\n' + await lerTexto(trabalhador, recorteDaFoto(foto, x0, y0, x1, y1, largura, realce), modo)
 		achadas = reconhecerCartas(texto)
+		if (achadas.length && achadas[0].pontos >= 10) break
+		aoProgresso('Lendo com mais cuidado…')
 	}
 	return { achadas, texto }
 }
