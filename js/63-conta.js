@@ -8,11 +8,27 @@ const TEXTO_STATUS = {
 	desconectado: '',
 }
 
+// O que o leitor de tela fala quando a sincronização muda. "Sincronizando" e "sincronizado" acontecem a
+// cada carta marcada, então só falamos ao perder a internet e quando ela volta (para não interromper sempre).
+const ANUNCIO_STATUS = {
+	offline: 'Sem internet. As mudanças serão enviadas quando a conexão voltar.',
+	voltou: 'Conexão de volta. Coleção sincronizada.',
+}
+
 let ultimoStatus = null
+let ficouOffline = false
 function mostrarStatus(status) {
-	if (status !== ultimoStatus) { registrar(status === 'offline' ? 'aviso' : 'info', `Sincronização: ${status}`); ultimoStatus = status }
+	if (status !== ultimoStatus) {
+		registrar(status === 'offline' ? 'aviso' : 'info', `Sincronização: ${status}`)
+		if (status === 'offline') { ficouOffline = true; anunciar(ANUNCIO_STATUS.offline) }
+		else if (status === 'sincronizado' && ficouOffline) { ficouOffline = false; anunciar(ANUNCIO_STATUS.voltou) }
+		else if (status === 'desconectado') ficouOffline = false
+		ultimoStatus = status
+	}
 	$('#status-nuvem').dataset.status = status
 	$('#status-nuvem').title = TEXTO_STATUS[status] || 'Entrar na conta'
+	// O nome do botão também diz o estado, para quem usa leitor de tela.
+	$('#status-nuvem').setAttribute('aria-label', TEXTO_STATUS[status] ? `Conta e sincronização: ${TEXTO_STATUS[status].replace(/^\S+\s/, '')}` : 'Conta e sincronização')
 	$('#conta-status').textContent = TEXTO_STATUS[status]
 }
 

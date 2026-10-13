@@ -91,6 +91,7 @@ $('#zoom-marcar').addEventListener('click', evento => {
 	atualizarCarta(cartaAberta)
 	atualizarBotaoZoom()
 	atualizarProgressoNaTela()
+	anunciarCarta(cartaAberta.dataset.set, cartaAberta.dataset.n)
 })
 
 // Quantidade de cópias: − e + na carta grande (− na última cópia tira a carta da coleção).
@@ -105,6 +106,7 @@ for (const [botao, passo] of [[$('#zoom-menos'), -1], [$('#zoom-mais'), 1]]) {
 		atualizarCarta(cartaAberta)
 		atualizarBotaoZoom()
 		atualizarProgressoNaTela()
+		anunciarCarta(set, n)
 	})
 }
 

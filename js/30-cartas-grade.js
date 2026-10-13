@@ -39,6 +39,13 @@ function atualizarCarta(botao) {
 	botao.setAttribute('aria-pressed', marcada)
 }
 
+// Anuncia no leitor de tela como a carta ficou depois de um toque (marcada, desmarcada, cópias).
+function anunciarCarta(setId, n) {
+	const nome = cartaDe(setId, n).carta?.nome || 'Carta'
+	const qtd = quantidadeDe(setId, n)
+	anunciar(qtd === 0 ? `${nome}: desmarcada` : qtd === 1 ? `${nome}: marcada como "tenho"` : `${nome}: ${qtd} cópias`)
+}
+
 function montarGrade(itens, mostrarSet) {
 	const grade = document.createElement('div')
 	grade.className = 'grade'
@@ -143,6 +150,7 @@ tela.addEventListener('click', evento => {
 	alternar(botao.dataset.set, botao.dataset.n)
 	atualizarCarta(botao)
 	atualizarProgressoNaTela()
+	anunciarCarta(botao.dataset.set, botao.dataset.n)
 })
 
 /* ---------- Tela: carta ampliada ---------- */

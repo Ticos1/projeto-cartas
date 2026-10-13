@@ -8,7 +8,9 @@
 	--borda: #dfe2e8;
 	--destaque: #d6342c;
 	--destaque-texto: #ffffff;
-	--ok: #1f9d55;
+	/* O destaque como cor de letra, mais escuro/claro para ler bem (o 62-tema.js recalcula para cada tema) */
+	--destaque-letra: #c3312b;
+	--ok: #16793e;
 	--sombra: 0 1px 3px rgba(0, 0, 0, .08), 0 4px 12px rgba(0, 0, 0, .05);
 	--simbolo-preto: #3a4050;
 	color-scheme: light;
@@ -23,6 +25,8 @@
 		--texto-fraco: #9aa1ad;
 		--borda: #323743;
 		--destaque: #f0524a;
+		--destaque-texto: #1b1d24;
+		--destaque-letra: #f0726c;
 		--ok: #3ccf7f;
 		--sombra: 0 1px 3px rgba(0, 0, 0, .4);
 		--simbolo-preto: #8f97a6;
@@ -38,6 +42,8 @@
 	--texto-fraco: #9aa1ad;
 	--borda: #323743;
 	--destaque: #f0524a;
+	--destaque-texto: #1b1d24;
+	--destaque-letra: #f0726c;
 	--ok: #3ccf7f;
 	--sombra: 0 1px 3px rgba(0, 0, 0, .4);
 	--simbolo-preto: #8f97a6;
@@ -48,6 +54,9 @@
 * { box-sizing: border-box; }
 
 [hidden] { display: none !important; }
+
+/* Fica fora da tela, mas o leitor de tela ainda lê */
+.so-leitor { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 
 html, body { margin: 0; }
 
@@ -470,7 +479,7 @@ main {
 
 /* ---------- Conta e sincronização ---------- */
 .campo { margin-bottom: 8px; }
-.erro { color: var(--destaque); font-size: .9rem; margin: 4px 0; }
+.erro { color: var(--destaque-letra); font-size: .9rem; margin: 4px 0; }
 .erro:empty { display: none; }
 .link {
 	display: block;
@@ -700,7 +709,7 @@ main {
 }
 .gaveta-item svg { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .gaveta-item:active { background: var(--superficie-2); }
-.gaveta-item[aria-current="page"] { background: var(--superficie-2); color: var(--destaque); }
+.gaveta-item[aria-current="page"] { background: var(--superficie-2); color: var(--destaque-letra); }
 
 /* ---------- Aba Pesquisa ---------- */
 .filtros { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
@@ -827,7 +836,7 @@ main {
 .log time { display: block; color: var(--texto-fraco); font-size: .72rem; }
 .log .nivel { font-weight: 700; font-size: .7rem; letter-spacing: .04em; margin-right: 6px; }
 .log.aviso .nivel { color: #e0a100; }
-.log.erro .nivel { color: var(--destaque); }
+.log.erro .nivel { color: var(--destaque-letra); }
 .log .detalhe { margin-top: 2px; color: var(--texto-fraco); font-size: .76rem; white-space: pre-wrap; }
 
 /* ---------- Lista de desejos: estrela na carta ampliada e selo nas cartas ---------- */
@@ -935,9 +944,9 @@ main {
 a.botao { text-align: center; text-decoration: none; }
 .tutorial { list-style: none; margin: 14px 0; padding: 0; display: grid; gap: 10px; }
 .passo { display: flex; gap: 12px; padding: 14px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 14px; }
-.passo-icone { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: var(--superficie-2); color: var(--destaque); font-size: 1.25rem; font-weight: 700; }
+.passo-icone { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: var(--superficie-2); color: var(--destaque-letra); font-size: 1.25rem; font-weight: 700; }
 .passo h3 { margin: 2px 0 6px; font-size: 1rem; }
-.passo-numero { color: var(--destaque); }
+.passo-numero { color: var(--destaque-letra); }
 .passo p { margin: 0 0 6px; font-size: .9rem; line-height: 1.45; color: var(--texto-fraco); }
 .passo p:last-child { margin-bottom: 0; }
 .passo b { color: var(--texto); }
@@ -966,7 +975,7 @@ html.com-anuncio .gaveta { width: min(100vw, calc(50vw + 170px)); }
 .gaveta-anuncio span { position: absolute; left: 2px; top: -20px; font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--texto-fraco); }
 
 /* ---------- Excluir conta ---------- */
-.link.perigo { color: var(--destaque); opacity: .85; margin-top: 6px; }
+.link.perigo { color: var(--destaque-letra); margin-top: 6px; }
 .botao.perigo { background: #d93a3a; color: #fff; }
 #form-excluir { margin-top: 10px; padding: 12px; border: 1px solid #d93a3a55; border-radius: 12px; }
 .rodape a { color: inherit; }
