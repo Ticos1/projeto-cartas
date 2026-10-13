@@ -1,0 +1,82 @@
+# Toda segunda-feira (ou quando mandar rodar na aba Actions) confere se o banco de cartas da TCGdex
+# ganhou coleções ou cartas novas. Se ganhou, regera data/cartas.json, sobe o número da versão do app
+# (para os celulares pegarem a lista nova) e abre um pull request para você revisar e aprovar.
+#
+# Precisa estar ligado em: Settings > Actions > General > Workflow permissions >
+#   "Allow GitHub Actions to create and approve pull requests".
+name: Atualizar lista de cartas
+
+on:
+  schedule:
+    - cron: '23 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Baixar o banco de cartas da TCGdex
+        run: git clone --depth 1 https://github.com/tcgdex/cards-database "$RUNNER_TEMP/cards-database"
+
+      - name: Gerar data/cartas.json
+        run: RESUMO_ARQUIVO="$RUNNER_TEMP/resumo.md" node scripts/gerar_dados.mjs "$RUNNER_TEMP/cards-database"
+
+      - name: Conferir se mudou
+        id: mudou
+        run: |
+          if git diff --quiet -- data/cartas.json; then
+            echo "mudou=false" >> "$GITHUB_OUTPUT"
+            echo "A lista de cartas já está em dia."
+          else
+            echo "mudou=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Subir a versão do app
+        if: steps.mudou.outputs.mudou == 'true'
+        run: node scripts/subir_versao.mjs
+
+      # Se a lista nova estiver estragada (set repetido, carta sem nome...), o workflow falha e nada é proposto.
+      - name: Testar a lista nova
+        if: steps.mudou.outputs.mudou == 'true'
+        run: npm test
+
+      - name: Montar a descrição do pull request
+        if: steps.mudou.outputs.mudou == 'true'
+        run: |
+          {
+            echo "A lista de cartas da TCGdex mudou. Este pull request foi aberto automaticamente."
+            echo
+            echo "## O que mudou"
+            echo
+            cat "$RUNNER_TEMP/resumo.md"
+            echo
+            echo "## Depois de aprovar"
+            echo
+            echo "- As imagens das cartas novas são baixadas sozinhas na publicação do site."
+            echo "- Coleções novas aparecem em **Coleções** e podem ser escondidas em **Escolher coleções**."
+            echo "- A versão do app foi aumentada, então os celulares pegam a lista nova na próxima abertura."
+          } > "$RUNNER_TEMP/corpo.md"
+
+      - name: Abrir o pull request
+        if: steps.mudou.outputs.mudou == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: automatico/atualizar-cartas
+          delete-branch: true
+          commit-message: Atualiza a lista de cartas (TCGdex)
+          title: Atualizar lista de cartas (TCGdex)
+          body-path: ${{ runner.temp }}/corpo.md
+          add-paths: |
+            data/cartas.json
+            sw.js
+            js/00-base.js

@@ -39,8 +39,9 @@ e Promos MEP.
 |---|---|
 | `index.html` | A página do app |
 | `styles.css` | Visual (cores, grade, modo escuro) |
-| `app.js` | Toda a lógica (telas, marcar cartas, busca, backup) |
+| `js/` | A lógica do app, em arquivos por assunto (ver "Código do app" abaixo) |
 | `nuvem.js` | Login e sincronização com o Firebase |
+| `sincronia.js` | Regras de junção da coleção local com a da nuvem (sem Firebase, testável) |
 | `data/cartas.json` | Lista de sets e cartas, gerada a partir do TCGdex |
 | `manifest.webmanifest` | Nome e ícone para instalar na tela inicial |
 | `sw.js` | Service worker: faz o app funcionar offline |
@@ -48,7 +49,89 @@ e Promos MEP.
 | `scripts/baixar_imagens.mjs` | Baixa as imagens das cartas (roda no GitHub Actions) |
 | `.github/workflows/pages.yml` | Publica o app no GitHub Pages |
 | `scripts/gerar_dados.mjs` | Gera o `data/cartas.json` (para atualizar ou adicionar sets) |
+| `scripts/comparar_dados.mjs` | Compara duas versões da lista de cartas e resume o que mudou |
+| `scripts/subir_versao.mjs` | Sobe o número da versão do app (`sw.js` e `js/00-base.js`) |
+| `tests/` | Testes automáticos (`npm test`) |
+| `.github/workflows/testes.yml` | Roda os testes a cada envio e pull request |
+| `.github/workflows/atualizar-cartas.yml` | Toda segunda confere cartas novas na TCGdex e abre um pull request |
 | `docs/etapa1-validacao.md` | Análise dos dados em português (Etapa 1) |
+
+## Código do app (`js/`)
+
+São scripts comuns do navegador que dividem as mesmas variáveis (carregados em ordem pelo `index.html`;
+o número no começo do nome é a ordem). Arquivos novos entram em três lugares: `index.html` (tag `<script>`),
+`sw.js` (`ARQUIVOS_APP`, para funcionar offline) e, se for um arquivo de lógica sem tela, em
+`tests/ambiente.mjs` (`ARQUIVOS`).
+
+| Arquivos | Conteúdo |
+|---|---|
+| `00-base` | Constantes, estado, armazenamento e logs |
+| `10-modelo` | Coleção (com quantidades), desejos, decks, coleções escondidas, master set |
+| `20-imagens-ajudantes` | Imagens e funções pequenas (busca, textos) |
+| `21-trocas-logica`, `22-importar-deck-logica`, `23-reconhecer-logica` | **Lógica sem tela** de Trocas, Importar deck e Escanear (testada em `tests/`) |
+| `30-cartas-grade`, `35-efeitos`, `40-liga-e-carta-grande` | Grade de cartas, toque longo, carta grande, efeitos de raridade e botões de compra |
+| `50` a `57` | Uma aba por arquivo: Coleções, Pesquisa, Desejos, Decks, Como usar/Configurações, tela do set, Trocas, Escanear |
+| `60-navegacao`, `61-menu-backup`, `62-tema`, `63-conta` | Rotas e botão voltar, menu e backup, temas, login e sincronização |
+| `70-app-android`, `71-anuncio`, `99-iniciar` | Atualização do APK, anúncio e início do app |
+
+## Testes
+
+```bash
+npm test
+```
+
+Usam só o Node (sem instalar nada). `tests/ambiente.mjs` carrega os arquivos de lógica de `js/` num
+navegador "de mentira" mínimo. Cobrem: coleção e quantidades (salvar, carregar, dados antigos ou estragados),
+junção com a nuvem, texto de trocas, importação de deck, reconhecimento de carta a partir do texto lido,
+a lista real de cartas (`data/cartas.json`: ids únicos, números únicos por set, tipos) e os scripts de atualização.
+O workflow `testes.yml` roda tudo a cada envio e pull request.
+
+## Quantidades (cópias repetidas)
+
+- `colecao` continua sendo "quais cartas tenho"; `quantidades` guarda só as cartas com **2 ou mais** cópias
+  (`{ idDoSet: { número: quantidade } }`, máximo 99). Quem tem 1 cópia não aparece ali, então backups e versões
+  antigas do app continuam valendo (no armazenamento: `{ versao: 2, cartas, quantidades }`).
+- Na nuvem, o documento ganhou o campo `quantidades`, escrito junto com `cartas` em uma única gravação por carta
+  (`quantidadeNaNuvem` em `nuvem.js`); no primeiro login, a maior quantidade de cada carta vence (`sincronia.js`).
+- Na carta grande: **− / +** em "Quantas cópias você tem". Na grade: selo **×N**. Tocar na carta para desmarcar zera tudo.
+- O backup (`versao: 2`) leva as quantidades; backups antigos importam normalmente.
+- Nos decks, "Você tem 2 · faltam 2" usa a quantidade, e "Faltantes → desejos" só manda o que realmente falta.
+
+## Trocas
+
+Aba **Trocas** (☰): "Tenho para trocar" = cópias que passam de 1 de cada carta; "Procuro" = Lista de Desejos que ainda não tenho.
+Filtros de coleção e raridade, **Copiar lista** e **Compartilhar** (texto pronto para WhatsApp: `textoDeTroca`),
+e botões **−** / **+** / **Recebi** para acertar a coleção depois da troca. Os preços ficam na Liga e na MYP Cards (variam muito).
+
+## Importar lista de deck
+
+Aba **Decks → Importar uma lista de deck**. Aceita o formato do Pokémon TCG Live (`4 Pikachu ex SVI 57`) e a lista
+que o próprio app copia. A carta é achada pela **sigla do set + número** (`set.sigla`, com ou sem zeros à esquerda,
+`BRS:TG` também vale `BRS`); se não achar, tenta pelo **nome** (prefere a carta que você já tem, depois a mais nova).
+Linhas não encontradas aparecem numa lista; o resto vira um deck novo.
+
+## Escanear cartas
+
+Aba **Escanear cartas** (☰). **Abrir a câmera** mostra o vídeo ao vivo com uma moldura no formato da carta; **Ler carta**
+recorta a moldura e lê o texto com [Tesseract.js](https://github.com/naptha/tesseract.js) (baixado da jsDelivr só na
+primeira vez, depois fica no cache; precisa de internet nessa primeira vez). `reconhecerCartas` (`js/23-reconhecer-logica.js`)
+procura o número impresso (`057/198`, corrigindo O→0 e I→1) e o nome, e cruza com `data/cartas.json`: número + total do set
+vale 10 pontos, nome inteiro soma 6. Mostra até 5 sugestões (empate: coleções não escondidas, depois as mais novas) com **+1**.
+Também há **Tirar foto** (app da câmera) e **Galeria**, que servem de reserva, e a busca à mão na mesma tela.
+
+- **Permissão:** o APK precisa da permissão `CAMERA` (já no `AndroidManifest.xml`); APKs antigos negam a câmera ao vivo
+  e o app avisa para usar "Tirar foto" ou atualizar. O push em `android-app/` gera o APK novo pelo workflow.
+- **Limite honesto:** testado com imagens das cartas e câmera simulada (24 casos: a carta certa ficou em 1º lugar em 16 e entre as 5 sugestões em 20; as falhas são cartas de layout diferente, como `me01-025`, e sets com o mesmo número e total, como `sv04`/`sv10` 150/182, que o nome desempata quando é lido; acerta bem com a carta encaixada e de frente;
+  cai com a carta pequena, muito inclinada ou com reflexo). O número da carta é o sinal mais forte; quando o nome também
+  é lido, o resultado fica bem mais certeiro. Falhas aparecem em Configurações → Logs.
+
+## Atualização automática das cartas
+
+`.github/workflows/atualizar-cartas.yml` roda toda segunda (e quando mandar, na aba Actions): baixa o banco da TCGdex,
+roda `gerar_dados.mjs`, e **se algo mudou** sobe a versão do app, roda os testes e abre um pull request
+(`automatico/atualizar-cartas`) com o resumo (coleções novas, cartas novas). As séries Megaevolução, Escarlate e Violeta e
+Espada e Escudo usam `sets: 'todos'`, então coleções novas entram sozinhas. Para funcionar: em **Settings → Actions → General →
+Workflow permissions**, marque *Allow GitHub Actions to create and approve pull requests*.
 
 ## Imagens e publicação (GitHub Pages)
 
@@ -77,8 +160,8 @@ node scripts/gerar_dados.mjs ../cards-database
 ```
 
 Para mudar os sets, edite a lista `SERIES` no começo de `scripts/gerar_dados.mjs`.
-Depois de mudar qualquer arquivo do app, aumente `VERSAO` em `sw.js` para os
-celulares pegarem a versão nova.
+Depois de mudar qualquer arquivo do app, aumente `VERSAO` em `sw.js` (e `VERSAO_APP` em `js/00-base.js`,
+que deve ser igual) para os celulares pegarem a versão nova: `node scripts/subir_versao.mjs` faz os dois.
 
 ## Login e sincronização (Firebase)
 
@@ -97,7 +180,7 @@ celulares pegarem a versão nova.
   muda (ou manualmente na aba Actions) e publica em **Releases**.
 - Link fixo do APK mais recente:
   https://github.com/Ticos1/projeto-cartas/releases/latest/download/colecao-tcg.apk
-- O app avisa quando existe um APK mais novo (`verificarVersaoDoApp` em `app.js`).
+- O app avisa quando existe um APK mais novo (`verificarVersaoDoApp` em `js/70-app-android.js`).
 - Assinatura: a chave e a senha ficam **só** nos segredos do repositório
   (`ANDROID_KEYSTORE_BASE64` e `ANDROID_KEYSTORE_PASSWORD`), nunca no código.
   Guarde uma cópia delas: sem a mesma chave, atualizações não instalam por cima do app.
@@ -106,7 +189,7 @@ celulares pegarem a versão nova.
 
 - O botão aparece ao segurar uma carta que **ainda não foi marcada** e abre a página da carta em
   `ligapokemon.com.br`. O formato do endereço é `?view=cards/card&card=Nome(número/total)`,
-  copiado dos links públicos da própria Liga (ver `linkLiga` em `app.js`).
+  copiado dos links públicos da própria Liga (ver `linkLiga` em `js/40-liga-e-carta-grande.js`).
 - Na Coleção Clássica de 30 Anos e nas Promos MEP a numeração da Liga é diferente da nossa;
   nelas o botão abre a **busca da Liga pelo nome** da carta.
 - A Liga protege as páginas internas contra robôs, então os links não são testados
@@ -116,7 +199,7 @@ celulares pegarem a versão nova.
 
 - No app Android, `MainActivity.java` faz o botão voltar andar no histórico do site
   (tela anterior). Só fecha o app quando não há mais para onde voltar (na lista de sets).
-- No site (`app.js`, seção "Botão voltar do celular"): a carta grande e o menu ganham uma
+- No site (`js/60-navegacao.js`, seção "Botão voltar do celular"): a carta grande e o menu ganham uma
   entrada no histórico, então o voltar só os fecha; e um set sempre tem a lista logo abaixo,
   mesmo se o app foi aberto direto nele.
 
@@ -125,7 +208,7 @@ celulares pegarem a versão nova.
 - `AtualizadorPlugin.java` (peça nativa do APK): baixa o APK novo com o gerenciador de downloads
   do Android (progresso na notificação) e abre o instalador. Só baixa de
   `github.com/Ticos1/projeto-cartas/releases/`.
-- No site (`app.js`, "Atualização do app feita pelo próprio app"): o aviso verde e o botão
+- No site (`js/70-app-android.js`, "Atualização do app feita pelo próprio app"): o aviso verde e o botão
   **Atualizar agora** (menu ⋮ → App Android) mostram o progresso e pedem ao Android, uma vez,
   a permissão "Permitir desta fonte".
 - APKs antigos (sem a peça) e o navegador usam o link de download comum.
@@ -134,7 +217,7 @@ celulares pegarem a versão nova.
 ## Efeitos de raridade
 
 Quando a carta termina de girar e para de frente, ela solta efeitos conforme a raridade
-(`EFEITOS_RARIDADE` em `app.js`): brilho que passa, halo colorido, reflexo holográfico e
+(`EFEITOS_RARIDADE` em `js/35-efeitos.js`): brilho que passa, halo colorido, reflexo holográfico e
 partículas. Comum não tem efeito. Os efeitos aparecem só na entrada da carta (cerca de 2 segundos)
 e depois somem, deixando a carta limpa. Para mudar ou criar um efeito, edite essa tabela.
 Quem desligou as animações no celular vê só um clarão rápido, sem movimento.
@@ -144,13 +227,13 @@ Quem desligou as animações no celular vê só um clarão rápido, sem moviment
 - Endereços: `#/pesquisa` (padrão), `#/colecoes` e `#/set/ID` (um set fica dentro de Coleções).
 - A gaveta (três riscos) é uma sobreposição no histórico: o botão voltar do celular só a fecha.
 - Para criar uma aba nova: um item em `<nav class="gaveta">` no `index.html`, uma função
-  `telaXxx()` em `app.js` e o caso correspondente em `rotaAtual()` e `navegar()`.
+  `telaXxx()` num arquivo novo em `js/` (e na lista de scripts do `index.html` e do `sw.js`) e o caso correspondente em `rotaAtual()` e `navegar()`.
 
 ## Filtros com ícones (Pesquisa)
 
 - **Coleção:** lista com o logo de cada set.
 - **Raridade:** lista com os mesmos símbolos impressos no canto da carta (● ◆ ★ ★★ …).
-  Os desenhos estão em `FORMAS_SIMBOLO` / `SIMBOLOS_RARIDADE` em `app.js`; a cor do "preto"
+  Os desenhos estão em `FORMAS_SIMBOLO` / `SIMBOLOS_RARIDADE` em `js/51-aba-pesquisa.js`; a cor do "preto"
   muda com o tema (`--simbolo-preto` em `styles.css`).
 
 ## Configurações (Temas e Logs)
@@ -175,7 +258,7 @@ Em **Coleções**, o botão **Escolher coleções** abre uma lista com um interr
 - **Dados na nuvem:** as regras do Firestore só deixam cada pessoa ler e escrever o próprio documento (`colecoes/{uid}`). Testado: sem login nada é lido; logado, não dá para ler, listar ou alterar o documento de outra pessoa nem criar outras coleções.
 - **Senhas:** ficam só no Firebase Authentication (o app nunca guarda a senha).
 - **Atualização do APK:** o app só baixa APKs de `github.com/Ticos1/projeto-cartas/releases/…` e, antes de abrir o instalador, confere se o arquivo é do mesmo app e assinado com a mesma chave; se não for, apaga o arquivo. O próprio Android também recusa uma atualização assinada com outra chave.
-- **APK:** sem backup automático dos dados do app (`allowBackup=false`), sem tráfego sem criptografia, e só as permissões de internet e de instalar a própria atualização.
+- **APK:** sem backup automático dos dados do app (`allowBackup=false`), sem tráfego sem criptografia, e só as permissões de internet, de instalar a própria atualização e de câmera (aba Escanear; as imagens não saem do aparelho).
 - **Chave de assinatura:** fica só nos segredos do GitHub (nunca no repositório).
 
 ## Como usar o app (tutorial)
@@ -185,7 +268,7 @@ Aba **Como usar o app** (primeira do menu ☰): um guia passo a passo de todas a
 - Um quadrado (300×250, "Publicidade") que aparece **só com a gaveta ☰ aberta**, no espaço vazio embaixo das abas. Com a gaveta fechada não há anúncio. Em telas baixas, onde não cabe, não aparece. O site (PC) não tem anúncio.
 - Hoje estão os **IDs de teste do Google** (aparece "Test Ad"). Para ganhar dinheiro, crie uma conta no AdMob e troque:
   - o **ID do app** em `android-app/android/app/src/main/AndroidManifest.xml` (`com.google.android.gms.ads.APPLICATION_ID`) — precisa gerar APK novo;
-  - o **ID do bloco de anúncios (banner)** em `bloco` e `teste: false` na constante `ANUNCIO` do `app.js` — muda pelo site, sem APK novo.
+  - o **ID do bloco de anúncios (banner)** em `bloco` e `teste: false` na constante `ANUNCIO` do `js/71-anuncio.js` — muda pelo site, sem APK novo.
 - O AdMob usa o ID de publicidade do aparelho; é preciso ter uma política de privacidade publicada para usar anúncios de verdade.
 
 ## Privacidade e exclusão de conta

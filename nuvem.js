@@ -5,6 +5,8 @@
 // No Firebase, cada usuário tem um documento colecoes/{id-do-usuário}:
 //   { cartas: { me01: ['001', '005'], ... }, atualizadoEm }
 
+import { juntar, juntarQuantidades } from './sincronia.js'
+
 const SDK = 'https://www.gstatic.com/firebasejs/11.10.0'
 
 const firebaseConfig = {
@@ -58,15 +60,6 @@ export function mensagemDeErro(erro) {
 	return MENSAGENS[erro?.code] || 'Não deu certo. Tente de novo.'
 }
 
-function juntar(a = {}, b = {}) {
-	const resultado = {}
-	for (const set of new Set([...Object.keys(a), ...Object.keys(b)])) {
-		const numeros = [...new Set([...(a[set] || []), ...(b[set] || [])])]
-		if (numeros.length) resultado[set] = numeros
-	}
-	return resultado
-}
-
 // opcoes: { colecaoLocal(), aoMudarUsuario(usuario), aoReceberColecao(cartas, semMasterSet), aoMudarStatus(status) }
 // status: 'desconectado' | 'sincronizando' | 'sincronizado' | 'offline'
 export function iniciarNuvem(opcoes) {
@@ -93,7 +86,8 @@ export function iniciarNuvem(opcoes) {
 					const decksUnidos = { ...(atual.data()?.decks || {}), ...(opcoes.decksLocal?.() || {}) }
 					const desejosUnidos = juntar(atual.data()?.desejos, opcoes.desejosLocal?.())
 				const semMaster = [...new Set([...(atual.data()?.semMasterSet || []), ...(opcoes.semMasterSetLocal?.() || [])])]
-				await dbSdk.setDoc(documento, { cartas: unido, desejos: desejosUnidos, decks: decksUnidos, colecoesEscondidas: escondidasUnidas, semMasterSet: semMaster, atualizadoEm: dbSdk.serverTimestamp() }, { merge: true })
+				const quantidadesUnidas = juntarQuantidades(atual.data()?.quantidades, opcoes.quantidadesLocal?.())
+				await dbSdk.setDoc(documento, { cartas: unido, quantidades: quantidadesUnidas, desejos: desejosUnidos, decks: decksUnidos, colecoesEscondidas: escondidasUnidas, semMasterSet: semMaster, atualizadoEm: dbSdk.serverTimestamp() }, { merge: true })
 				try { localStorage.setItem(chaveJuntou, '1') } catch { /* sem localStorage */ }
 			} catch (erro) {
 				console.warn('Não foi possível juntar com a nuvem agora:', erro)
@@ -101,7 +95,7 @@ export function iniciarNuvem(opcoes) {
 		}
 
 		pararDeOuvir = dbSdk.onSnapshot(documento, { includeMetadataChanges: true }, foto => {
-			if (foto.exists()) avisos.aoReceberColecao(foto.data().cartas || {}, foto.data().semMasterSet || [], foto.data().desejos || {}, foto.data().colecoesEscondidas || [], foto.data().decks || {})
+			if (foto.exists()) avisos.aoReceberColecao(foto.data().cartas || {}, foto.data().semMasterSet || [], foto.data().desejos || {}, foto.data().colecoesEscondidas || [], foto.data().decks || {}, foto.data().quantidades || {})
 			const pendente = foto.metadata.hasPendingWrites
 			avisos.aoMudarStatus(pendente ? 'sincronizando' : foto.metadata.fromCache ? 'offline' : 'sincronizado')
 		}, erro => {
@@ -121,19 +115,22 @@ export async function sair() {
 	try { localStorage.removeItem(`colecao-tcg-juntou-${uid}`) } catch { /* sem localStorage */ }
 }
 
-// Marca/desmarca uma carta na nuvem. Só altera aquela carta, então dois aparelhos
-// marcando cartas diferentes ao mesmo tempo não apagam um ao outro.
-export function marcarNaNuvem(setId, numero, tem) {
+// Grava quantas cópias da carta existem (0 = não tenho). Só altera aquela carta, então dois aparelhos
+// marcando cartas diferentes ao mesmo tempo não apagam um ao outro. A lista "cartas" continua sendo a
+// lista de quem tenho (versões antigas do app só leem ela); "quantidades" guarda só as cartas com 2 ou mais.
+export function quantidadeNaNuvem(setId, numero, quantidade) {
 	if (!documento) return
-	const operacao = tem ? dbSdk.arrayUnion(numero) : dbSdk.arrayRemove(numero)
-	dbSdk.setDoc(documento, { cartas: { [setId]: operacao }, atualizadoEm: dbSdk.serverTimestamp() }, { merge: true })
-		.catch(erro => console.warn('Falha ao salvar na nuvem:', erro))
+	dbSdk.setDoc(documento, {
+		cartas: { [setId]: quantidade > 0 ? dbSdk.arrayUnion(numero) : dbSdk.arrayRemove(numero) },
+		quantidades: { [setId]: { [numero]: quantidade >= 2 ? quantidade : dbSdk.deleteField() } },
+		atualizadoEm: dbSdk.serverTimestamp(),
+	}, { merge: true }).catch(erro => console.warn('Falha ao salvar na nuvem:', erro))
 }
 
 // Usado ao importar um backup: troca a coleção inteira.
-export function substituirNaNuvem(cartas, desejos, decks) {
+export function substituirNaNuvem(cartas, desejos, decks, quantidades) {
 	if (!documento) return
-	const dados = { cartas, atualizadoEm: dbSdk.serverTimestamp() }
+	const dados = { cartas, quantidades: quantidades || {}, atualizadoEm: dbSdk.serverTimestamp() }
 	if (desejos) dados.desejos = desejos
 	if (decks) dados.decks = decks
 	dbSdk.setDoc(documento, dados, { mergeFields: Object.keys(dados) })
