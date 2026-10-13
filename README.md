@@ -121,7 +121,7 @@ Também há **Tirar foto** (app da câmera) e **Galeria**, que servem de reserva
 
 - **Permissão:** o APK precisa da permissão `CAMERA` (já no `AndroidManifest.xml`); APKs antigos negam a câmera ao vivo
   e o app avisa para usar "Tirar foto" ou atualizar. O push em `android-app/` gera o APK novo pelo workflow.
-- **Limite honesto:** testado com imagens das cartas e câmera simulada (acerta bem com a carta encaixada e de frente;
+- **Limite honesto:** testado com imagens das cartas e câmera simulada (24 casos: a carta certa ficou em 1º lugar em 16 e entre as 5 sugestões em 20; as falhas são cartas de layout diferente, como `me01-025`, e sets com o mesmo número e total, como `sv04`/`sv10` 150/182, que o nome desempata quando é lido; acerta bem com a carta encaixada e de frente;
   cai com a carta pequena, muito inclinada ou com reflexo). O número da carta é o sinal mais forte; quando o nome também
   é lido, o resultado fica bem mais certeiro. Falhas aparecem em Configurações → Logs.
 
