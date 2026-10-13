@@ -1028,9 +1028,11 @@ html.com-anuncio .gaveta { width: min(100vw, calc(50vw + 170px)); }
 .camera > :not(video) { z-index: 1; }
 .camera-aviso { position: absolute; left: 12px; right: 12px; bottom: 10px; margin: 0; text-align: center; color: #fff; font-size: .88rem; text-shadow: 0 1px 3px #000; }
 .camera.sem-camera .camera-aviso { top: 50%; bottom: auto; transform: translateY(-50%); }
-.camera-lanterna { position: absolute; top: 10px; right: 10px; width: 42px; height: 42px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .5); font-size: 1.2rem; }
+.camera-botao { position: absolute; top: 10px; width: 42px; height: 42px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .5); font-size: 1.2rem; }
+.camera-lanterna { right: 10px; }
+.camera-trocar { left: 10px; }
 .camera-lanterna[aria-pressed="true"] { background: #ffd54a; }
-.camera-lanterna[hidden], .camera-tentar[hidden] { display: none; }
+.camera-botao[hidden], .camera-tentar[hidden] { display: none; }
 .botao.camera-tentar { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); width: auto; padding: 10px 18px; }
 .escanear-dica { margin-bottom: 4px; }
 
