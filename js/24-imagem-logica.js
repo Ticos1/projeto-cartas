@@ -134,7 +134,24 @@ function acharContornos(cinza, largura, altura, quantos = 4) {
 	return escolhidos
 }
 
+// Tira a média de cada cor e normaliza (tamanho 1) um trecho de um vetor, no próprio lugar (sem criar vetores novos).
+function normalizarNoLugar(vetor, inicio, tamanho) {
+	let r = 0, g = 0, b = 0
+	for (let k = inicio; k < inicio + tamanho; k += 3) { r += vetor[k]; g += vetor[k + 1]; b += vetor[k + 2] }
+	const n = tamanho / 3
+	r /= n; g /= n; b /= n
+	let soma = 0
+	for (let k = inicio; k < inicio + tamanho; k += 3) {
+		vetor[k] -= r; vetor[k + 1] -= g; vetor[k + 2] -= b
+		soma += vetor[k] * vetor[k] + vetor[k + 1] * vetor[k + 1] + vetor[k + 2] * vetor[k + 2]
+	}
+	const tam = Math.sqrt(soma) || 1
+	for (let k = inicio; k < inicio + tamanho; k++) vetor[k] /= tam
+}
+
 // Banco de assinaturas: Int8Array (uma assinatura fina por carta, na ordem de dados.sets) → vetores prontos para comparar.
+// Feito num laço só, sem criar vetores por carta: com ~8.600 cartas isso pesa no celular. A escala não muda nada
+// (a assinatura é normalizada), então os bytes entram direto.
 function montarBancoDeAssinaturas(bytes, escala, cartas) {
 	const tamFina = GRADE.largura * GRADE.altura * 3
 	const tamGrossa = GRADE_GROSSA.largura * GRADE_GROSSA.altura * 3
@@ -143,13 +160,24 @@ function montarBancoDeAssinaturas(bytes, escala, cartas) {
 	const grossa = new Float32Array(n * tamGrossa)
 	const valida = new Uint8Array(n)
 	for (let i = 0; i < n; i++) {
-		const vetor = new Float32Array(tamFina)
+		const base = i * tamFina
 		let vazio = true
-		for (let j = 0; j < tamFina; j++) { vetor[j] = bytes[i * tamFina + j] / escala; if (vetor[j]) vazio = false }
+		for (let j = 0; j < tamFina; j++) if (bytes[base + j]) { vazio = false; break }
 		if (vazio) continue   // carta sem imagem
 		valida[i] = 1
-		fina.set(normalizarAssinatura(vetor), i * tamFina)
-		grossa.set(assinaturaGrossa(vetor), i * tamGrossa)
+		const baseGrossa = i * tamGrossa
+		for (let y = 0; y < GRADE.altura; y++) {
+			for (let x = 0; x < GRADE.largura; x++) {
+				const o = base + (y * GRADE.largura + x) * 3
+				const d = baseGrossa + ((y >> 1) * GRADE_GROSSA.largura + (x >> 1)) * 3
+				for (let c = 0; c < 3; c++) {
+					fina[o + c] = bytes[o + c]
+					grossa[d + c] += bytes[o + c]
+				}
+			}
+		}
+		normalizarNoLugar(fina, base, tamFina)
+		normalizarNoLugar(grossa, baseGrossa, tamGrossa)
 	}
 	return { n, fina, grossa, valida, cartas, tamFina, tamGrossa }
 }
@@ -171,7 +199,10 @@ function marcaDasCartas(lista) {
 // Imagem da câmera (RGBA) → cartas mais parecidas: [{ set, carta, indice, pontos }], da mais para a menos parecida.
 // `pontos` vai de -1 a 1 (1 = idêntica); acima de ~0,6 é quase sempre a carta certa. Também devolve a
 // região (em frações da imagem) onde a carta foi achada, para o leitor de texto ler o número dali.
-function reconhecerPorImagem(pixels, largura, altura, banco, limite = 5) {
+// `regioesExtras`: lugares onde a carta provavelmente está (ex.: a moldura da câmera, em frações da imagem), testados
+// junto com os contornos achados. Em cartas de arte cheia (ex, ilustradas) as bordas do desenho confundem a busca
+// de contornos; a moldura, onde o usuário encaixa a carta, resolve esses casos.
+function reconhecerPorImagem(pixels, largura, altura, banco, limite = 5, regioesExtras = []) {
 	// Os contornos são procurados numa versão com metade do tamanho (bem mais rápido, e basta).
 	const lc = Math.floor(largura / 2), ac = Math.floor(altura / 2)
 	const cinza = new Float32Array(lc * ac)
@@ -196,7 +227,7 @@ function reconhecerPorImagem(pixels, largura, altura, banco, limite = 5) {
 	}
 	const assinaturaDaJanela = regiao => normalizarAssinatura(gradeDaRegiao(integral, regiao.x0 * largura, regiao.y0 * altura, regiao.x1 * largura, regiao.y1 * altura))
 	const centrais = []
-	for (const r of acharContornos(cinza, lc, ac, 4)) {
+	for (const r of [...regioesExtras, ...acharContornos(cinza, lc, ac, 4)]) {
 		for (const tamanho of [1, 0.93, 0.86, 0.8]) {
 			centrais.push(assinaturaGrossa(assinaturaDaJanela(regiaoDaJanela(r, tamanho, 0, 0))))
 			for (const dx of [-0.03, 0, 0.03]) {
@@ -209,32 +240,61 @@ function reconhecerPorImagem(pixels, largura, altura, banco, limite = 5) {
 	}
 	if (!janelas.length) return []
 	// 1ª passada (rápida): nota grossa de cada carta nas janelas centradas; ficam as 60 melhores cartas.
+	// As janelas ficam num vetor só e cada carta é lida uma vez (bem mais rápido no celular).
 	const { n, tamFina, tamGrossa, valida } = banco
+	const nCentrais = centrais.length
+	const consultas = new Float32Array(nCentrais * tamGrossa)
+	centrais.forEach((q, j) => consultas.set(q, j * tamGrossa))
 	const notaGrossa = new Float32Array(n).fill(-2)
-	for (const q of centrais) {
-		for (let i = 0; i < n; i++) {
-			if (!valida[i]) continue
+	const bancoGrosso = banco.grossa
+	for (let i = 0; i < n; i++) {
+		if (!valida[i]) continue
+		const base = i * tamGrossa
+		let melhor = -2
+		for (let j = 0; j < nCentrais; j++) {
+			const q = j * tamGrossa
 			let s = 0
-			const base = i * tamGrossa
-			for (let k = 0; k < tamGrossa; k++) s += q[k] * banco.grossa[base + k]
-			if (s > notaGrossa[i]) notaGrossa[i] = s
+			for (let k = 0; k < tamGrossa; k++) s += consultas[q + k] * bancoGrosso[base + k]
+			if (s > melhor) melhor = s
 		}
+		notaGrossa[i] = melhor
 	}
-	const candidatas = [...notaGrossa.keys()].filter(i => valida[i]).sort((a, b) => notaGrossa[b] - notaGrossa[a]).slice(0, 60)
+	const candidatas = melhoresIndices(notaGrossa, valida, 60)
 	// 2ª passada (fina): essas cartas em todas as janelas (centradas e deslocadas).
+	const nJanelas = janelas.length
+	const finas = new Float32Array(nJanelas * tamFina)
+	janelas.forEach((janela, j) => finas.set(janela.fina, j * tamFina))
+	const bancoFino = banco.fina
 	const resultado = candidatas.map(i => {
-		let pontos = -2, regiao = null
-		for (const janela of janelas) {
-			const q = janela.fina
+		let pontos = -2, melhorJanela = 0
+		const base = i * tamFina
+		for (let j = 0; j < nJanelas; j++) {
+			const q = j * tamFina
 			let s = 0
-			const base = i * tamFina
-			for (let k = 0; k < tamFina; k++) s += q[k] * banco.fina[base + k]
-			if (s > pontos) { pontos = s; regiao = janela.regiao }
+			for (let k = 0; k < tamFina; k++) s += finas[q + k] * bancoFino[base + k]
+			if (s > pontos) { pontos = s; melhorJanela = j }
 		}
-		return { ...banco.cartas[i], indice: i, pontos, regiao }
+		return { ...banco.cartas[i], indice: i, pontos, regiao: janelas[melhorJanela].regiao }
 	})
 	resultado.sort((a, b) => b.pontos - a.pontos)
 	return resultado.slice(0, limite)
+}
+
+// Índices das `quantos` maiores notas (só das cartas válidas), da maior para a menor, sem ordenar a lista inteira.
+function melhoresIndices(notas, valida, quantos) {
+	const escolhidos = []
+	let piorNota = -Infinity
+	for (let i = 0; i < notas.length; i++) {
+		if (!valida[i]) continue
+		const nota = notas[i]
+		if (escolhidos.length >= quantos && nota <= piorNota) continue
+		let p = escolhidos.length
+		while (p > 0 && notas[escolhidos[p - 1]] < nota) p--
+		escolhidos.splice(p, 0, i)
+		if (escolhidos.length > quantos) escolhidos.pop()
+		piorNota = notas[escolhidos[escolhidos.length - 1]]
+	}
+	return escolhidos
 }
 
 // Quão parecidas são duas cartas do banco (1 = mesma arte, como reimpressões).

@@ -112,6 +112,7 @@ async function reconhecerFoto(arquivo, aoProgresso) {
 // e fica guardado no aparelho (sw.js). Sem ele, a câmera usa só o leitor de texto.
 let bancoDeImagens = null
 let carregandoBanco = null
+let bancoFalhou = false
 
 function carregarBancoDeImagens() {
 	carregandoBanco ||= (async () => {
@@ -123,9 +124,10 @@ function carregarBancoDeImagens() {
 		const arquivo = await fetch(`data/${info.arquivo}`)
 		if (!arquivo.ok) throw new Error(`${info.arquivo}: HTTP ${arquivo.status}`)
 		bancoDeImagens = montarBancoDeAssinaturas(new Int8Array(await arquivo.arrayBuffer()), info.escala, lista)
+		bancoFalhou = false
 		registrar('info', `Escanear: reconhecimento pela imagem pronto (${info.comImagem} cartas)`)
 		return bancoDeImagens
-	})().catch(erro => { carregandoBanco = null; throw erro })
+	})().catch(erro => { carregandoBanco = null; bancoFalhou = true; throw erro })
 	return carregandoBanco
 }
 
@@ -188,7 +190,12 @@ async function ligarCamera() {
 		return
 	}
 	mensagemDaCamera('Abrindo a câmera…')
-	carregarBancoDeImagens().catch(erro => registrar('aviso', 'Escanear: sem reconhecimento pela imagem', textoDe(erro)))
+	carregarBancoDeImagens().then(() => {
+		if (geracao !== geracaoDaCamera) return
+		if (!ultimaReconhecida) mensagemDaCamera('Coloque a carta na moldura')
+		// O leitor de texto (para desempatar reimpressões) carrega depois, para não disputar o celular com a câmera.
+		setTimeout(() => { if (geracao === geracaoDaCamera) prepararLeitor().catch(() => {}) }, 2500)
+	}, erro => registrar('aviso', 'Escanear: sem reconhecimento pela imagem', textoDe(erro)))
 	let fluxo
 	try {
 		const salva = ler(CHAVE_CAMERA)
@@ -231,7 +238,7 @@ async function ligarCamera() {
 	const video = $('#camera-video')
 	video.srcObject = fluxo
 	video.play().catch(() => {})
-	mensagemDaCamera('Coloque a carta na moldura')
+	mensagemDaCamera(bancoDeImagens || bancoFalhou ? 'Coloque a carta na moldura' : 'Preparando o reconhecimento… (só na primeira vez; precisa de internet)')
 	varrerCamera(geracao)
 }
 
@@ -284,15 +291,23 @@ function quadroDaCamera(folga) {
 	return quadro
 }
 
-// Mesmo recorte reduzido para 200 px de altura (o reconhecimento pela imagem não precisa de mais).
-function pixelsReduzidos(quadro, altura = 200) {
-	const largura = Math.max(1, Math.round(quadro.width * altura / quadro.height))
-	const canvas = document.createElement('canvas')
-	canvas.width = largura
-	canvas.height = altura
-	const g = canvas.getContext('2d', { willReadFrequently: true })
+// O recorte para a imagem pega a moldura com 12% de folga em volta; dentro dele, a moldura em si ocupa esta região.
+const FOLGA_DA_IMAGEM = 0.12
+const MOLDURA_NO_RECORTE = (() => { const m = FOLGA_DA_IMAGEM / (1 + 2 * FOLGA_DA_IMAGEM); return { x0: m, y0: m, x1: 1 - m, y1: 1 - m } })()
+
+// Recorte da moldura já reduzido para 200 px de altura, direto do vídeo (o reconhecimento pela imagem não precisa
+// de mais). O canvas é sempre o mesmo: criar um por quadro gasta memória e deixa o celular lento.
+const telaPequena = document.createElement('canvas')
+function pixelsDaMoldura(folga, altura = 200) {
+	const video = $('#camera-video')
+	if (!video?.videoWidth || video.paused) return null
+	const r = regiaoDaMoldura(video, $('#camera-moldura'), folga)
+	if (r.largura < 50 || r.altura < 50) return null
+	const largura = Math.max(1, Math.round(r.largura * altura / r.altura))
+	if (telaPequena.width !== largura || telaPequena.height !== altura) { telaPequena.width = largura; telaPequena.height = altura }
+	const g = telaPequena.getContext('2d', { willReadFrequently: true })
 	g.imageSmoothingQuality = 'high'
-	g.drawImage(quadro, 0, 0, largura, altura)
+	g.drawImage(video, r.x, r.y, r.largura, r.altura, 0, 0, largura, altura)
 	return { pixels: g.getImageData(0, 0, largura, altura).data, largura, altura }
 }
 
@@ -317,73 +332,108 @@ async function lerQuadro(trabalhador, quadro) {
 	return { achadas: reconhecerCartas(texto), texto }
 }
 
+// O leitor de texto (1 a 3 s por leitura no celular) roda em segundo plano, uma leitura por vez: o laço da
+// câmera nunca fica esperando por ele, então o reconhecimento pela imagem continua a cada quadro.
+let leituraDeTexto = null
+function lerEmSegundoPlano(tarefa) {
+	if (leituraDeTexto) return
+	if (!leitor) { prepararLeitor().catch(erro => registrar('aviso', 'Escanear: leitor de texto indisponível', textoDe(erro))); return }
+	leituraDeTexto = tarefa(leitor)
+		.catch(erro => registrar('aviso', 'Escanear: falha ao ler o texto de um quadro', textoDe(erro)))
+		.finally(() => { leituraDeTexto = null })
+}
+
+// Cartas com a mesma arte (reimpressões): qual delas o número lido apontou, por grupo. Assim o texto é lido
+// uma vez por carta, e não a cada quadro.
+const desempates = new Map()
+const chaveDoGrupo = gemeas => gemeas.map(chaveDaCarta).sort().join(' ')
+
 // Laço da câmera: enquanto esta abertura da câmera durar (mesma `geracao`), olha um quadro e repete.
-// Pela imagem leva uma fração de segundo; o leitor de texto (mais lento) só entra para desempatar
+// Pela imagem leva uma fração de segundo; o leitor de texto só entra (em segundo plano) para desempatar
 // cartas com a mesma arte ou quando a imagem não basta.
 async function varrerCamera(geracao) {
 	const ativa = () => geracao === geracaoDaCamera
-	prepararLeitor().catch(erro => registrar('aviso', 'Escanear: leitor de texto indisponível', textoDe(erro)))
 	while (ativa()) {
-		if (!bancoDeImagens && !leitor) mensagemDaCamera('Preparando o reconhecimento… (só na primeira vez; precisa de internet)')
+		if (bancoFalhou && !bancoDeImagens && !leitor) mensagemDaCamera('Preparando o leitor de texto… (só na primeira vez; precisa de internet)')
 		try {
-			if (!lendoFoto) await cicloDaCamera(ativa)
+			if (!lendoFoto) cicloDaCamera(ativa)
 		} catch (erro) {
-			if (!ativa()) return   // saiu da aba no meio da leitura (o leitor foi encerrado)
 			registrar('aviso', 'Escanear: falha ao ler um quadro', textoDe(erro))
 		}
-		await esperar(bancoDeImagens ? 80 : 300)
+		await esperar(bancoDeImagens ? 60 : 300)
 	}
 }
 
-async function cicloDaCamera(ativa) {
-	const quadro = quadroDaCamera(0.12)
-	if (!quadro) return
-	let achadas = []
-	let texto = ''
-	let pelaImagem = false
-	if (bancoDeImagens) {
-		const { pixels, largura, altura } = pixelsReduzidos(quadro)
-		const resultado = reconhecerPorImagem(pixels, largura, altura, bancoDeImagens)
-		const escolha = escolherPelaImagem(resultado, bancoDeImagens)
-		if (escolha) {
-			pelaImagem = true
-			const chaves = escolha.gemeas.map(chaveDaCarta)
-			// Mesma arte em mais de uma carta: o número impresso (lido na região onde a carta foi achada) desempata.
-			let principal = escolha.carta
-			if (escolha.gemeas.length > 1 && leitor) {
-				texto = await lerRegiao(leitor, recortarRegiao(quadro, escolha.carta.regiao), LER_RODAPE)
-				if (!ativa()) return
-				const pelasLetras = reconhecerCartas(texto).filter(r => r.pontos >= 10).map(chaveDaCarta)
-				principal = escolha.gemeas.find(g => pelasLetras.includes(chaveDaCarta(g))) || principal
-			}
-			// Nota alta vale na hora; perto do limite, a carta precisa aparecer em dois quadros seguidos.
-			const confirmada = principal.pontos >= 0.7 || gemeasAnteriores.includes(chaveDaCarta(principal))
-			gemeasAnteriores = chaves
-			if (!confirmada) return
-			achadas = [principal, ...resultado.filter(r => r !== principal)]
-		} else {
-			gemeasAnteriores = []
-		}
-	}
-	// Sem resposta pela imagem: tenta pelo texto, que é lento (1 a 2 s). Com o banco de imagens, só de vez em
-	// quando, para não travar o reconhecimento pela imagem enquanto a carta é ajeitada na moldura.
-	if (!pelaImagem && leitor && (!bancoDeImagens || leiturasSemCarta % 8 === 7)) {
-		const lido = await lerQuadro(leitor, quadroDaCamera(0.06) || quadro)
-		texto = lido.texto
-		if (lido.achadas.length && lido.achadas[0].pontos >= 16) achadas = lido.achadas
-	}
-	if (!ativa()) return
-	if (!achadas.length) {
-		leiturasSemCarta++
-		if (leiturasSemCarta >= (bancoDeImagens ? 15 : 6)) mensagemDaCamera('Encaixe a carta inteira na moldura, de frente e sem reflexo')
+function cicloDaCamera(ativa) {
+	if (!bancoDeImagens) {
+		// Sem o banco de imagens (ainda baixando, ou falhou): só o leitor de texto, se o banco falhou.
+		if (bancoFalhou) lerTextoDaCamera(ativa)
 		return
 	}
+	const quadro = pixelsDaMoldura(FOLGA_DA_IMAGEM)
+	if (!quadro) return
+	const resultado = reconhecerPorImagem(quadro.pixels, quadro.largura, quadro.altura, bancoDeImagens, 5, [MOLDURA_NO_RECORTE])
+	const escolha = escolherPelaImagem(resultado, bancoDeImagens)
+	if (!escolha) {
+		gemeasAnteriores = []
+		leiturasSemCarta++
+		if (leiturasSemCarta >= 25) mensagemDaCamera('Encaixe a carta inteira na moldura, de frente e sem reflexo')
+		// De vez em quando, o leitor de texto tenta pelo número (em segundo plano).
+		if (leiturasSemCarta % 10 === 9) lerTextoDaCamera(ativa)
+		return
+	}
+	const chaves = escolha.gemeas.map(chaveDaCarta)
+	let principal = escolha.carta
+	if (escolha.gemeas.length > 1) {
+		// Mesma arte em mais de uma carta: o número impresso desempata. Enquanto não foi lido, vale a da imagem.
+		const grupo = chaveDoGrupo(escolha.gemeas)
+		const decidida = desempates.get(grupo)
+		if (decidida) principal = escolha.gemeas.find(g => chaveDaCarta(g) === decidida) || principal
+		else desempatarPeloNumero(ativa, escolha, grupo)
+	}
+	// Nota alta vale na hora; perto do limite, a carta precisa aparecer em dois quadros seguidos.
+	const confirmada = principal.pontos >= 0.7 || gemeasAnteriores.includes(chaveDaCarta(principal))
+	gemeasAnteriores = chaves
+	if (!confirmada) return
+	apresentar([principal, ...resultado.filter(r => r !== principal)], `imagem ${principal.pontos.toFixed(2)}`, '')
+}
+
+// Lê o rodapé da carta (na região onde a imagem a achou) para saber qual das gêmeas é.
+function desempatarPeloNumero(ativa, escolha, grupo) {
+	lerEmSegundoPlano(async trabalhador => {
+		const quadro = quadroDaCamera(FOLGA_DA_IMAGEM)
+		if (!quadro) return
+		const texto = await lerRegiao(trabalhador, recortarRegiao(quadro, escolha.carta.regiao), LER_RODAPE)
+		if (!ativa()) return
+		const pelasLetras = reconhecerCartas(texto).filter(r => r.pontos >= 10).map(chaveDaCarta)
+		const certa = escolha.gemeas.find(g => pelasLetras.includes(chaveDaCarta(g)))
+		if (!certa) return
+		desempates.set(grupo, chaveDaCarta(certa))
+		// Se a carta mostrada é deste grupo e o número aponta outra, troca.
+		if (resultadoEscaneado && grupo.split(' ').includes(`${resultadoEscaneado.set}|${resultadoEscaneado.n}`) && chaveDaCarta(certa) !== ultimaReconhecida) {
+			apresentar([certa, ...escolha.gemeas.filter(g => g !== certa)], 'texto (desempate)', texto)
+		}
+	})
+}
+
+// Sem resposta pela imagem: o leitor de texto procura o número e o nome (em segundo plano).
+function lerTextoDaCamera(ativa) {
+	lerEmSegundoPlano(async trabalhador => {
+		const quadro = quadroDaCamera(0.06)
+		if (!quadro) return
+		const lido = await lerQuadro(trabalhador, quadro)
+		if (!ativa() || !lido.achadas.length || lido.achadas[0].pontos < 16) return
+		apresentar(lido.achadas, 'texto', lido.texto)
+	})
+}
+
+function apresentar(achadas, como, texto) {
 	leiturasSemCarta = 0
 	mensagemDaCamera('Carta reconhecida ✓')
 	const chave = chaveDaCarta(achadas[0])
 	if (chave === ultimaReconhecida) return
 	ultimaReconhecida = chave
-	registrar('info', `Escanear (${pelaImagem ? `imagem ${achadas[0].pontos.toFixed(2)}` : 'texto'}): ${achadas[0].carta.nome}`, texto.replace(/\s+/g, ' ').slice(0, 300))
+	registrar('info', `Escanear (${como}): ${achadas[0].carta.nome}`, texto.replace(/\s+/g, ' ').slice(0, 300))
 	navigator.vibrate?.(40)
 	mostrarResultado(achadas)
 }
