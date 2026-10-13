@@ -1645,7 +1645,12 @@ async function fotoDoDeck(deck) {
 	ctx.fillStyle = '#fff'
 	ctx.textBaseline = 'alphabetic'
 	ctx.font = 'bold 44px system-ui, sans-serif'
-	ctx.fillText(deck.nome, MARGEM, 62, largura - MARGEM * 2)
+	ctx.fillText(deck.nome, MARGEM, 62, largura - MARGEM * 2 - 220)
+	ctx.textAlign = 'right'
+	ctx.fillStyle = '#e63946'
+	ctx.font = 'bold 36px system-ui, sans-serif'
+	ctx.fillText('Ticards', largura - MARGEM, 62)
+	ctx.textAlign = 'left'
 	const porTipo = { P: 0, T: 0, E: 0 }
 	for (const { carta, qtd } of itens) porTipo[tipoDoGrupo(carta.t)] += qtd
 	ctx.fillStyle = '#aab'
