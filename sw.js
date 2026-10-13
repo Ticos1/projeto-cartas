@@ -2,7 +2,7 @@
 //
 // Ao mudar algum arquivo do app, aumente o número da VERSAO para os celulares
 // baixarem a versão nova.
-const VERSAO = 'v43'
+const VERSAO = 'v44'
 const CACHE_APP = `colecao-app-${VERSAO}`
 const CACHE_IMAGENS = 'colecao-imagens'
 
@@ -10,7 +10,25 @@ const ARQUIVOS_APP = [
 	'./',
 	'index.html',
 	'styles.css',
-	'app.js',
+	'js/00-base.js',
+	'js/10-modelo.js',
+	'js/20-imagens-ajudantes.js',
+	'js/30-cartas-grade.js',
+	'js/35-efeitos.js',
+	'js/40-liga-e-carta-grande.js',
+	'js/50-aba-colecoes.js',
+	'js/51-aba-pesquisa.js',
+	'js/52-aba-desejos.js',
+	'js/53-aba-decks.js',
+	'js/54-aba-ajuda-config.js',
+	'js/55-tela-set.js',
+	'js/60-navegacao.js',
+	'js/61-menu-backup.js',
+	'js/62-tema.js',
+	'js/63-conta.js',
+	'js/70-app-android.js',
+	'js/71-anuncio.js',
+	'js/99-iniciar.js',
 	'nuvem.js',
 	'data/cartas.json',
 	'manifest.webmanifest',
@@ -26,7 +44,7 @@ self.addEventListener('install', evento => {
 })
 
 // Baixa TODOS os arquivos do app de uma vez, direto da rede (sem usar cópias velhas do
-// navegador), e guarda no cache desta versão. Assim index.html, app.js e os outros
+// navegador), e guarda no cache desta versão. Assim index.html, js/*.js e os outros
 // arquivos são sempre do mesmo lote: nunca se misturam versões diferentes.
 async function precarregar() {
 	const cache = await caches.open(CACHE_APP)

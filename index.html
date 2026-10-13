@@ -198,7 +198,7 @@
 				}))
 			}).then(function () {
 				// Baixa de novo os arquivos do app, ignorando a memória do navegador (que guarda por 10 min).
-				var arquivos = ['index.html', 'styles.css', 'app.js', 'nuvem.js', 'sw.js', 'data/cartas.json', 'manifest.webmanifest']
+				var arquivos = ['index.html', 'styles.css', 'js/00-base.js', 'js/10-modelo.js', 'js/20-imagens-ajudantes.js', 'js/30-cartas-grade.js', 'js/35-efeitos.js', 'js/40-liga-e-carta-grande.js', 'js/50-aba-colecoes.js', 'js/51-aba-pesquisa.js', 'js/52-aba-desejos.js', 'js/53-aba-decks.js', 'js/54-aba-ajuda-config.js', 'js/55-tela-set.js', 'js/60-navegacao.js', 'js/61-menu-backup.js', 'js/62-tema.js', 'js/63-conta.js', 'js/70-app-android.js', 'js/71-anuncio.js', 'js/99-iniciar.js', 'nuvem.js', 'sw.js', 'data/cartas.json', 'manifest.webmanifest']
 				return Promise.all(arquivos.map(function (a) { return passo(fetch(a, { cache: 'reload' })) }))
 			}).then(function () { location.reload() })
 		}
@@ -215,6 +215,24 @@
 		setTimeout(mostrar, 8000)
 	})()
 	</script>
-	<script src="app.js"></script>
+	<script src="js/00-base.js"></script>
+	<script src="js/10-modelo.js"></script>
+	<script src="js/20-imagens-ajudantes.js"></script>
+	<script src="js/30-cartas-grade.js"></script>
+	<script src="js/35-efeitos.js"></script>
+	<script src="js/40-liga-e-carta-grande.js"></script>
+	<script src="js/50-aba-colecoes.js"></script>
+	<script src="js/51-aba-pesquisa.js"></script>
+	<script src="js/52-aba-desejos.js"></script>
+	<script src="js/53-aba-decks.js"></script>
+	<script src="js/54-aba-ajuda-config.js"></script>
+	<script src="js/55-tela-set.js"></script>
+	<script src="js/60-navegacao.js"></script>
+	<script src="js/61-menu-backup.js"></script>
+	<script src="js/62-tema.js"></script>
+	<script src="js/63-conta.js"></script>
+	<script src="js/70-app-android.js"></script>
+	<script src="js/71-anuncio.js"></script>
+	<script src="js/99-iniciar.js"></script>
 </body>
 </html>
