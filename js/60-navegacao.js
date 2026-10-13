@@ -8,6 +8,8 @@ function rotaAtual() {
 	if (partes[0] === 'colecoes') return { aba: 'colecoes' }
 	if (partes[0] === 'desejos') return { aba: 'desejos', sub: partes[1] === 'comprar' ? 'comprar' : '' }
 	if (partes[0] === 'decks') return { aba: 'decks' }
+	if (partes[0] === 'trocas') return { aba: 'trocas' }
+	if (partes[0] === 'escanear') return { aba: 'escanear' }
 	if (partes[0] === 'deck') return { aba: 'decks', deckId: decodeURIComponent(partes[1] || '') }
 	if (partes[0] === 'configuracoes') return { aba: 'configuracoes', sub: partes[1] === 'logs' ? 'logs' : 'temas' }
 	if (partes[0] === 'pesquisa') return { aba: 'pesquisa' }
@@ -28,6 +30,8 @@ function navegar() {
 	else if (aba === 'colecoes') telaColecoes()
 	else if (aba === 'ajuda') telaComoUsar()
 	else if (aba === 'decks') rotaAtual().deckId ? telaDeck(rotaAtual().deckId) : telaDecks()
+	else if (aba === 'trocas') telaTrocas()
+	else if (aba === 'escanear') telaEscanear()
 	else if (aba === 'desejos') sub === 'comprar' ? telaComprarNaLiga() : telaDesejos()
 	else if (aba === 'configuracoes') telaConfiguracoes(sub)
 	else telaPesquisa()

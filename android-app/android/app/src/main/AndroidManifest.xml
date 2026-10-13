@@ -44,6 +44,9 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Câmera ao vivo da aba "Escanear cartas" (as fotos são lidas no aparelho e não são enviadas a ninguém) -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     <!-- Para o app instalar a própria atualização (o usuário ainda precisa permitir) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

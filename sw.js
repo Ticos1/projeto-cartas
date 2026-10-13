@@ -2,7 +2,7 @@
 //
 // Ao mudar algum arquivo do app, aumente o número da VERSAO para os celulares
 // baixarem a versão nova.
-const VERSAO = 'v44'
+const VERSAO = 'v46'
 const CACHE_APP = `colecao-app-${VERSAO}`
 const CACHE_IMAGENS = 'colecao-imagens'
 
@@ -13,6 +13,9 @@ const ARQUIVOS_APP = [
 	'js/00-base.js',
 	'js/10-modelo.js',
 	'js/20-imagens-ajudantes.js',
+	'js/21-trocas-logica.js',
+	'js/22-importar-deck-logica.js',
+	'js/23-reconhecer-logica.js',
 	'js/30-cartas-grade.js',
 	'js/35-efeitos.js',
 	'js/40-liga-e-carta-grande.js',
@@ -22,6 +25,8 @@ const ARQUIVOS_APP = [
 	'js/53-aba-decks.js',
 	'js/54-aba-ajuda-config.js',
 	'js/55-tela-set.js',
+	'js/56-aba-trocas.js',
+	'js/57-aba-escanear.js',
 	'js/60-navegacao.js',
 	'js/61-menu-backup.js',
 	'js/62-tema.js',
@@ -30,6 +35,7 @@ const ARQUIVOS_APP = [
 	'js/71-anuncio.js',
 	'js/99-iniciar.js',
 	'nuvem.js',
+	'sincronia.js',
 	'data/cartas.json',
 	'manifest.webmanifest',
 	'privacidade.html',
@@ -76,7 +82,9 @@ self.addEventListener('fetch', evento => {
 
 	if (url.hostname === 'assets.tcgdex.net' || (url.origin === self.location.origin && url.pathname.includes('/img/'))) {
 		evento.respondWith(imagem(request))
-	} else if (url.hostname === 'www.gstatic.com' && url.pathname.startsWith('/firebasejs/')) {
+	} else if ((url.hostname === 'www.gstatic.com' && url.pathname.startsWith('/firebasejs/')) ||
+		(url.hostname === 'cdn.jsdelivr.net' && url.pathname.startsWith('/npm/tesseract')) || url.hostname === 'tessdata.projectnaptha.com') {
+		// Bibliotecas de versão fixa (login e leitor de texto do Escanear): guarda e reutiliza.
 		evento.respondWith(bibliotecaFirebase(request))
 	} else if (url.origin === self.location.origin) {
 		evento.respondWith(arquivoDoApp(request))
@@ -121,7 +129,7 @@ async function imagem(request) {
 	}
 }
 
-// Biblioteca do Firebase (login): cada versão nunca muda, então guarda e reutiliza.
+// Bibliotecas externas (Firebase, Tesseract): cada versão nunca muda, então guarda e reutiliza.
 async function bibliotecaFirebase(request) {
 	const cache = await caches.open(CACHE_IMAGENS)
 	const guardado = await cache.match(request.url)

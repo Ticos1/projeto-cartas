@@ -1,13 +1,35 @@
 'use strict'
 
 /* ---------- Coleção ---------- */
+// colecao = quais cartas tenho. quantidades = só as cartas com 2 ou mais cópias: { idDoSet: { número: quantidade } }.
+// Quem tem 1 cópia não aparece em quantidades (assim backups e versões antigas do app continuam valendo).
+const MAX_COPIAS = 99
+let quantidades = {}
+
+// Lê o conteúdo salvo ({ cartas, quantidades }) e devolve as duas estruturas. Funciona com dados antigos (sem quantidades).
+function lerColecaoSalva(salvo) {
+	const cartas = {}
+	const copias = {}
+	for (const [set, numeros] of Object.entries(salvo?.cartas || {})) {
+		if (Array.isArray(numeros)) cartas[set] = new Set(numeros.map(String))
+	}
+	for (const [set, porNumero] of Object.entries(salvo?.quantidades || {})) {
+		if (!cartas[set] || typeof porNumero !== 'object' || !porNumero) continue
+		for (const [n, q] of Object.entries(porNumero)) {
+			const qtd = Math.min(MAX_COPIAS, Math.floor(Number(q)))
+			if (cartas[set].has(n) && qtd >= 2) (copias[set] || (copias[set] = {}))[n] = qtd
+		}
+	}
+	return { cartas, quantidades: copias }
+}
+
 function carregarColecao() {
 	colecao = {}
+	quantidades = {}
 	try {
-		const salvo = JSON.parse(ler(CHAVE_COLECAO) || '{}')
-		for (const [set, numeros] of Object.entries(salvo.cartas || {})) {
-			colecao[set] = new Set(numeros)
-		}
+		const lido = lerColecaoSalva(JSON.parse(ler(CHAVE_COLECAO) || '{}'))
+		colecao = lido.cartas
+		quantidades = lido.quantidades
 	} catch { /* coleção vazia */ }
 }
 
@@ -19,8 +41,17 @@ function colecaoComoObjeto() {
 	return cartas
 }
 
+function quantidadesComoObjeto() {
+	const copias = {}
+	for (const [set, porNumero] of Object.entries(quantidades)) {
+		const validas = Object.entries(porNumero).filter(([n, q]) => q >= 2 && colecao[set]?.has(n))
+		if (validas.length) copias[set] = Object.fromEntries(validas)
+	}
+	return copias
+}
+
 function salvarColecao() {
-	const ok = gravar(CHAVE_COLECAO, JSON.stringify({ versao: 1, cartas: colecaoComoObjeto() }))
+	const ok = gravar(CHAVE_COLECAO, JSON.stringify({ versao: 2, cartas: colecaoComoObjeto(), quantidades: quantidadesComoObjeto() }))
 	if (!ok) avisar('Não foi possível salvar. O navegador está em modo privado?')
 }
 
@@ -52,13 +83,42 @@ function tenho(setId, numero) {
 	return colecao[setId]?.has(numero) || false
 }
 
-function alternar(setId, numero) {
+// Quantas cópias tenho: 0 se não tenho, 1 se marquei só uma, ou o número guardado em quantidades.
+function quantidadeDe(setId, numero) {
+	return tenho(setId, numero) ? (quantidades[setId]?.[numero] || 1) : 0
+}
+
+// Define quantas cópias tenho (0 = tirar da coleção). Devolve o valor aplicado.
+function definirQuantidade(setId, numero, quantidade) {
+	const qtd = Math.max(0, Math.min(MAX_COPIAS, Math.floor(Number(quantidade) || 0)))
 	const numeros = colecao[setId] || (colecao[setId] = new Set())
-	if (numeros.has(numero)) numeros.delete(numero)
-	else numeros.add(numero)
+	if (qtd) numeros.add(numero)
+	else numeros.delete(numero)
+	if (qtd >= 2) (quantidades[setId] || (quantidades[setId] = {}))[numero] = qtd
+	else if (quantidades[setId]) {
+		delete quantidades[setId][numero]
+		if (!Object.keys(quantidades[setId]).length) delete quantidades[setId]
+	}
 	salvarColecao()
-	nuvem?.marcarNaNuvem(setId, numero, numeros.has(numero))
-	return numeros.has(numero)
+	nuvem?.quantidadeNaNuvem(setId, numero, qtd)
+	return qtd
+}
+
+// Toque na carta: tenho ↔ não tenho (ao desmarcar, as cópias extras também saem).
+function alternar(setId, numero) {
+	return definirQuantidade(setId, numero, tenho(setId, numero) ? 0 : 1) > 0
+}
+
+// Cartas com cópias sobrando (para trocar): todas as que tenho em 2 ou mais cópias, com quantas sobram (cópias − 1).
+function cartasRepetidas() {
+	const itens = []
+	for (const set of dados.sets) {
+		for (const carta of set.cartas) {
+			const extras = quantidadeDe(set.id, carta.n) - 1
+			if (extras > 0) itens.push({ set, carta, extras })
+		}
+	}
+	return itens
 }
 
 /* ---------- Master set ---------- */

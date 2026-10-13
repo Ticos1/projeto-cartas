@@ -32,7 +32,7 @@ function mostrarUsuario(novo) {
 }
 
 // Chegou a coleção da nuvem (de outro aparelho, ou a junção do primeiro login).
-function receberColecao(cartas, semMaster = [], desejosNuvem = {}, escondidasNuvem = [], decksNuvem = {}) {
+function receberColecao(cartas, semMaster = [], desejosNuvem = {}, escondidasNuvem = [], decksNuvem = {}, quantidadesNuvem = {}) {
 	decks = decksDeObjeto(decksNuvem)
 	gravar(CHAVE_DECKS, JSON.stringify(decksParaNuvem()))
 	escondidas = new Set(escondidasNuvem)
@@ -48,15 +48,16 @@ function receberColecao(cartas, semMaster = [], desejosNuvem = {}, escondidasNuv
 		const { setId } = rotaAtual()
 		if (setId) desenharGradeSet(dados.sets.find(s => s.id === setId))
 	}
-	colecao = {}
-	for (const [set, numeros] of Object.entries(cartas)) colecao[set] = new Set(numeros)
+	const lido = lerColecaoSalva({ cartas, quantidades: quantidadesNuvem })
+	colecao = lido.cartas
+	quantidades = lido.quantidades
 	salvarColecao()
 	// Atualiza a tela sem perder a rolagem nem o que foi digitado na busca.
 	for (const botao of document.querySelectorAll('.carta')) atualizarCarta(botao)
 	if (!$('#zoom').hidden && cartaAberta) atualizarBotaoZoom()
 	const { aba, setId, sub } = rotaAtual()
 	if (aba === 'decks') { const { deckId } = rotaAtual(); if (deckId) desenharDeck(deckId); else desenharListaDecks() }
-	if (!setId) { if (aba === 'colecoes') { if (!editandoColecoes) desenharColecoes(); else atualizarContagemDasSeries() } else if (aba === 'desejos') sub === 'comprar' ? desenharComprarNaLiga() : desenharDesejos(); else if (aba === 'pesquisa') desenharPesquisa() }
+	if (!setId) { if (aba === 'colecoes') { if (!editandoColecoes) desenharColecoes(); else atualizarContagemDasSeries() } else if (aba === 'desejos') sub === 'comprar' ? desenharComprarNaLiga() : desenharDesejos(); else if (aba === 'pesquisa') desenharPesquisa(); else if (aba === 'trocas') desenharTrocas() }
 	atualizarProgressoNaTela()
 }
 
@@ -71,6 +72,7 @@ async function carregarNuvem() {
 	}
 	nuvem.iniciarNuvem({
 		colecaoLocal: colecaoComoObjeto,
+		quantidadesLocal: quantidadesComoObjeto,
 		semMasterSetLocal: () => [...semMasterSet],
 		desejosLocal: desejosComoObjeto,
 		escondidasLocal: () => [...escondidas],

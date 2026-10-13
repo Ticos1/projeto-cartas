@@ -36,6 +36,13 @@ function telaDecks() {
 			<input class="busca" id="nome-deck" placeholder="Nome do novo deck" maxlength="60" autocomplete="off" required>
 			<button class="botao" type="submit">Criar deck</button>
 		</form>
+		<details class="importar-deck" id="importar-deck">
+			<summary>Importar uma lista de deck</summary>
+			<p class="dica">Cole aqui a lista exportada do Pokémon TCG Live (ou copiada de outro deck do Ticards). Cada linha vira uma carta pela sigla e pelo número do set.</p>
+			<textarea class="busca" id="importar-texto" rows="6" placeholder="4 Pikachu ex SVI 57&#10;4 Nest Ball SVI 181&#10;12 Basic Lightning Energy SVE 4" spellcheck="false"></textarea>
+			<button class="botao" id="importar-botao">Importar como novo deck</button>
+			<div id="importar-resultado"></div>
+		</details>
 		<div id="conteudo"></div>`
 	$('#novo-deck').addEventListener('submit', evento => {
 		evento.preventDefault()
@@ -46,6 +53,27 @@ function telaDecks() {
 		salvarDeck(id)
 		registrar('info', `Deck criado: ${nome}`)
 		location.hash = `#/deck/${id}`
+	})
+	$('#importar-botao').addEventListener('click', () => {
+		const resultado = importarListaDeDeck($('#importar-texto').value)
+		const achadas = Object.keys(resultado.cartas).length
+		if (!achadas) {
+			$('#importar-resultado').innerHTML = `<p class="avisos-deck">Não encontrei nenhuma carta nessa lista.${resultado.naoAchadas.length ? ' Confira se cada linha tem o formato "4 Nome SIGLA número".' : ''}</p>`
+			return
+		}
+		const id = novoIdDeDeck()
+		const nome = ($('#nome-deck').value.trim() || 'Deck importado').slice(0, 60)
+		decks[id] = { nome, criado: Date.now(), cartas: resultado.cartas }
+		salvarDeck(id)
+		registrar('info', `Deck importado: ${nome} (${resultado.total - resultado.naoAchadas.length} cartas, ${resultado.naoAchadas.length} linhas não achadas)`, resultado.naoAchadas.join(' | '))
+		if (!resultado.naoAchadas.length) { location.hash = `#/deck/${id}`; return }
+		$('#importar-resultado').innerHTML = `
+			<p class="deck-ok">✓ Deck "${escapar(nome)}" criado.</p>
+			<p class="avisos-deck">Não encontrei ${resultado.naoAchadas.length} linha${resultado.naoAchadas.length > 1 ? 's' : ''}:</p>
+			<ul class="avisos-deck">${resultado.naoAchadas.slice(0, 20).map(l => `<li>${escapar(l)}</li>`).join('')}</ul>
+			<p class="dica">Você pode adicionar essas cartas à mão pela busca dentro do deck.</p>
+			<a class="botao" href="#/deck/${id}">Abrir o deck</a>`
+		desenharListaDecks()
 	})
 	desenharListaDecks()
 }
@@ -123,10 +151,10 @@ function telaDeck(id) {
 	})
 	$('#deck-desejos').addEventListener('click', () => {
 		let n = 0
-		for (const { set, carta } of itensDoDeck(deck)) {
-			if (!tenho(set.id, carta.n) && !desejada(set.id, carta.n)) { alternarDesejo(set.id, carta.n); n++ }
+		for (const { set, carta, qtd } of itensDoDeck(deck)) {
+			if (faltamNoDeck(set, carta, qtd) && !desejada(set.id, carta.n)) { alternarDesejo(set.id, carta.n); n++ }
 		}
-		avisar(n ? `${n} carta${n > 1 ? 's' : ''} adicionada${n > 1 ? 's' : ''} à lista de desejos ★` : 'Nada a adicionar: você já tem ou já deseja todas.')
+		avisar(n ? `${n} carta${n > 1 ? 's' : ''} adicionada${n > 1 ? 's' : ''} à lista de desejos ★` : 'Nada a adicionar: você já tem as cópias necessárias ou já deseja todas.')
 	})
 	$('#deck-renomear').addEventListener('click', () => {
 		const nome = prompt('Novo nome do deck:', deck.nome)?.trim()
@@ -165,10 +193,19 @@ const controlesQtd = (chave, qtd) => `<span class="qtd">
 	<b>${qtd}</b>
 	<button class="qtd-botao" data-chave="${escapar(chave)}" data-qtd="1" aria-label="Pôr mais uma">+</button>
 </span>`
+// Quanto falta para montar a carta no deck: o deck pede `qtd` cópias e eu tenho `quantidadeDe`.
+const faltamNoDeck = (set, carta, qtd) => Math.max(0, qtd - quantidadeDe(set.id, carta.n))
+function situacaoDaCarta(set, carta, qtd) {
+	const tem = quantidadeDe(set.id, carta.n)
+	if (!tem) return '<small class="deck-falta">Você não tem</small>'
+	const falta = faltamNoDeck(set, carta, qtd)
+	if (falta) return `<small class="deck-falta">Você tem ${tem} · faltam ${falta}</small>`
+	return `<small class="deck-tenho">✓ Você tem${tem > 1 ? ` ${tem}` : ''}</small>`
+}
 const linhaDeCarta = (set, carta, chave, qtd) => `<li class="item-deck">
 	<span class="item-liga-img" data-set="${escapar(set.id)}" data-n="${escapar(carta.n)}"><img alt="" loading="lazy"></span>
 	<span class="item-liga-texto"><b>${escapar(carta.nome)}</b><small>${escapar([set.sigla || set.nome, numeroExibido(set, carta)].join(' · '))}</small>
-		<small class="${tenho(set.id, carta.n) ? 'deck-tenho' : 'deck-falta'}">${tenho(set.id, carta.n) ? '✓ Você tem' : 'Você não tem'}</small></span>
+		${situacaoDaCarta(set, carta, qtd)}</span>
 	${controlesQtd(chave, qtd)}
 </li>`
 function carregarMiniaturas(elemento) {

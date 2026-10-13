@@ -54,7 +54,7 @@ async function entregarArquivo(nome, texto, tipo, titulo) {
 $('#exportar').addEventListener('click', async () => {
 	const cartas = colecaoComoObjeto()
 	const quantidade = Object.values(cartas).reduce((soma, lista) => soma + lista.length, 0)
-	const backup = { app: 'minha-colecao-tcg', versao: 1, exportadoEm: new Date().toISOString(), cartas, desejos: desejosComoObjeto(), decks: decksParaNuvem() }
+	const backup = { app: 'minha-colecao-tcg', versao: 2, exportadoEm: new Date().toISOString(), cartas, quantidades: quantidadesComoObjeto(), desejos: desejosComoObjeto(), decks: decksParaNuvem() }
 	const nome = `colecao-tcg-${new Date().toISOString().slice(0, 10)}.json`
 	const resultado = await entregarArquivo(nome, JSON.stringify(backup, null, 1), 'application/json', 'Backup da coleção')
 	if (resultado === 'compartilhado') avisar(`Backup com ${quantidade} cartas exportado.`)
@@ -82,7 +82,9 @@ $('#arquivo-backup').addEventListener('change', async evento => {
 		const atuais = Object.values(colecao).reduce((soma, s) => soma + s.size, 0)
 		const ondeSubstitui = usuario ? ' (no aparelho e na sua conta)' : ''
 		if (!confirm(`Substituir sua coleção atual${ondeSubstitui} (${atuais} cartas) pelo backup (${quantidade} cartas)?`)) return
-		colecao = novas
+		const lido = lerColecaoSalva({ cartas: backup.cartas, quantidades: backup.quantidades })
+		colecao = lido.cartas
+		quantidades = lido.quantidades
 		salvarColecao()
 		if (backup.desejos && typeof backup.desejos === 'object') {
 			desejos = {}
@@ -93,7 +95,7 @@ $('#arquivo-backup').addEventListener('change', async evento => {
 			decks = decksDeObjeto(backup.decks)
 			gravar(CHAVE_DECKS, JSON.stringify(decksParaNuvem()))
 		}
-		nuvem?.substituirNaNuvem(colecaoComoObjeto(), desejosComoObjeto(), decksParaNuvem())
+		nuvem?.substituirNaNuvem(colecaoComoObjeto(), desejosComoObjeto(), decksParaNuvem(), quantidadesComoObjeto())
 		fecharMenu()
 		navegar()
 		avisar(`Backup importado: ${quantidade} cartas.`)

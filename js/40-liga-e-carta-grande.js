@@ -49,6 +49,11 @@ function atualizarBotaoZoom() {
 		$('#zoom-buscar').hidden = !liga.exato
 	}
 	if ($('#zoom-status')) $('#zoom-status').hidden = !marcada
+	const copias = quantidadeDe(cartaAberta.dataset.set, cartaAberta.dataset.n)
+	$('#zoom-qtd').hidden = !marcada
+	$('#zoom-qtd-valor').textContent = copias
+	$('#zoom-menos').disabled = copias < 1
+	$('#zoom-mais').disabled = copias >= MAX_COPIAS
 	$('#zoom-marcar').textContent = marcada ? 'Desmarcar' : 'Marcar como "tenho"'
 	$('#zoom-marcar').classList.toggle('secundario', marcada)
 }
@@ -87,6 +92,21 @@ $('#zoom-marcar').addEventListener('click', evento => {
 	atualizarBotaoZoom()
 	atualizarProgressoNaTela()
 })
+
+// Quantidade de cópias: − e + na carta grande (− na última cópia tira a carta da coleção).
+for (const [botao, passo] of [[$('#zoom-menos'), -1], [$('#zoom-mais'), 1]]) {
+	botao.addEventListener('click', evento => {
+		evento.stopPropagation()
+		const novoToque = toqueComecouNoZoom || evento.detail === 0
+		toqueComecouNoZoom = false
+		if (!novoToque) return
+		const { set, n } = cartaAberta.dataset
+		definirQuantidade(set, n, quantidadeDe(set, n) + passo)
+		atualizarCarta(cartaAberta)
+		atualizarBotaoZoom()
+		atualizarProgressoNaTela()
+	})
+}
 
 // Fecha ao tocar fora do botão, mas só num toque novo: o mesmo dedo que segurou a
 // carta, ao soltar, não deve fechar a carta que acabou de abrir.

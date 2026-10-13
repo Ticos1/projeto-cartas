@@ -4,28 +4,22 @@
 //   git clone --depth 1 https://github.com/tcgdex/cards-database
 //   node scripts/gerar_dados.mjs caminho/para/cards-database
 //
-// Para adicionar ou remover sets, edite a lista SETS abaixo.
+// Para adicionar ou remover sets, edite a lista SERIES abaixo. Séries com sets: 'todos' pegam sozinhas
+// os sets novos que o banco ganhar (é o que o workflow atualizar-cartas.yml usa toda semana).
+//
+// Se a variável RESUMO_ARQUIVO estiver definida, o resumo do que mudou é escrito nesse arquivo.
 
 import fs from 'node:fs'
 import path from 'node:path'
 import vm from 'node:vm'
+import { compararDados, descreverMudancas } from './comparar_dados.mjs'
 
 // Séries (pasta dentro de data/ do banco), na ordem em que aparecem no app.
 // sets: lista de pastas de set; ou 'todos' para pegar todos os sets da série (em ordem de lançamento).
 // altaOnline: não guarda a imagem grande no site (só a pequena); a grande vem direto do TCGdex. Poupa espaço no GitHub Pages.
 // ultimos: ids de sets que ficam no fim da série (promos e extras).
 const SERIES = [
-	{ pasta: 'Mega Evolution', sets: [
-		'Mega Evolution',
-		'Phantasmal Flames',
-		'Ascended Heroes',
-		'Perfect Order',
-		'Chaos Rising',
-		'Pitch Black',
-		'30th Celebration',
-		'30th Classic Collection',
-		'MEP Black Star Promos',
-	] },
+	{ pasta: 'Mega Evolution', sets: 'todos', ultimos: ['mee', 'mep'] },
 	{ pasta: 'Scarlet & Violet', sets: 'todos', altaOnline: true, ultimos: ['svp', 'sve', 'mfb'] },
 	{ pasta: 'Sword & Shield', sets: 'todos', altaOnline: true, ultimos: ['swshp', 'fut2020', 'cel25', 'cel25cc'] },
 ]
@@ -145,5 +139,16 @@ if (desconhecidas.size) console.warn('Raridades sem tradução:', [...desconheci
 
 const destino = new URL('../data/cartas.json', import.meta.url)
 fs.mkdirSync(new URL('.', destino), { recursive: true })
-fs.writeFileSync(destino, JSON.stringify(saida))
-console.log('Gerado:', destino.pathname, `(${saida.sets.length} sets)`)
+let antigo = null
+try { antigo = JSON.parse(fs.readFileSync(destino, 'utf8')) } catch { /* primeira geração */ }
+const mudancas = compararDados(antigo, saida)
+if (antigo && mudancas.iguais) {
+	// Nada mudou além da data: não mexe no arquivo (assim não vira "mudança" no git).
+	console.log('Sem mudanças nas cartas.')
+} else {
+	fs.writeFileSync(destino, JSON.stringify(saida))
+	console.log('Gerado:', destino.pathname, `(${saida.sets.length} sets)`)
+}
+const resumo = descreverMudancas(mudancas)
+console.log(resumo)
+if (process.env.RESUMO_ARQUIVO) fs.writeFileSync(process.env.RESUMO_ARQUIVO, resumo + '\n')

@@ -14,14 +14,25 @@ function criarCarta(set, carta, mostrarSet) {
 			<span class="sem-imagem">${escapar(carta.nome)}</span>
 			<img alt="${escapar(carta.nome)}" loading="lazy" decoding="async">
 			<span class="selo">${ICONE_CHECK}</span>
+			<span class="selo-qtd" aria-hidden="true"></span>
 			<span class="selo-desejo" aria-hidden="true">★</span>
 		</div>
 		<span class="carta-legenda"><b>${escapar(carta.nome)}</b>${escapar(mostrarSet ? `${set.nome} · ${carta.n}` : numeroExibido(set, carta))}</span>`
 	carregarImagem(botao.querySelector('img'), set.id, carta.n, 'low')
+	mostrarQuantidadeNaCarta(botao)
 	return botao
 }
 
+// Carta com 2 ou mais cópias ganha o selo "×N" no canto de baixo.
+function mostrarQuantidadeNaCarta(botao) {
+	const qtd = quantidadeDe(botao.dataset.set, botao.dataset.n)
+	const selo = botao.querySelector('.selo-qtd')
+	selo.textContent = qtd >= 2 ? `×${qtd}` : ''
+	selo.classList.toggle('visivel', qtd >= 2)
+}
+
 function atualizarCarta(botao) {
+	mostrarQuantidadeNaCarta(botao)
 	const marcada = tenho(botao.dataset.set, botao.dataset.n)
 	botao.classList.toggle('tenho', marcada)
 	botao.classList.toggle('desejada', desejada(botao.dataset.set, botao.dataset.n))

@@ -3,11 +3,14 @@
 /* ---------- Aba: Como usar o app (tutorial) ---------- */
 const PASSOS_TUTORIAL = [
 	{ icone: '☰', titulo: 'Navegue pelas abas', texto: [
-		'Toque nos <b>três riscos</b> no canto de cima para trocar de aba: Como usar, Pesquisa, Coleções, Lista de Desejos, Decks e Configurações.',
+		'Toque nos <b>três riscos</b> no canto de cima para trocar de aba: Como usar, Pesquisa, Coleções, Lista de Desejos, Decks, Trocas, Escanear cartas e Configurações.',
 		'O botão <b>voltar</b> do celular volta para a tela anterior (e fecha a carta ampliada ou os menus).'] },
 	{ icone: '✓', titulo: 'Marque as cartas que você tem', texto: [
 		'<b>Toque</b> numa carta para marcar que você tem (ela fica colorida, com um ✓ verde). Toque de novo para desmarcar.',
 		'As cartas que faltam ficam apagadas, em preto e branco.'] },
+	{ icone: '×2', titulo: 'Cópias repetidas', texto: [
+		'Tem mais de uma cópia? Segure a carta e use <b>+</b> e <b>−</b> em "Quantas cópias você tem". Na grade, a carta mostra <b>×2</b>, <b>×3</b>…',
+		'Tocar na carta para desmarcar tira <b>todas</b> as cópias. Os decks usam esse número para dizer quantas cópias ainda faltam.'] },
 	{ icone: '👆', titulo: 'Segure para ver a carta grande', texto: [
 		'<b>Segure</b> uma carta por meio segundo: ela gira, mostra o verso e para de frente, com efeitos conforme a raridade.',
 		'Na carta grande dá para marcar ou desmarcar, e abrir a carta na <b>Liga Pokémon</b> para comprar.',
@@ -25,10 +28,17 @@ const PASSOS_TUTORIAL = [
 	{ icone: '🃏', titulo: 'Decks', texto: [
 		'Na aba <b>Decks</b>, crie um deck com um nome, busque as cartas e use <b>+</b> e <b>−</b> para escolher quantas cópias.',
 		'O app conta as 60 cartas, separa Pokémon, Treinador e Energia e avisa se passar de 4 cópias com o mesmo nome.',
-		'Mostra quais cartas você já tem, manda as que faltam para a <b>Lista de Desejos</b> e copia a lista do deck ou compartilha uma <b>foto</b> dele.'] },
+		'Mostra quais cartas você já tem, manda as que faltam para a <b>Lista de Desejos</b> e copia a lista do deck ou compartilha uma <b>foto</b> dele.',
+		'Em <b>Importar uma lista de deck</b> você cola a lista do Pokémon TCG Live e o app monta o deck pela sigla e pelo número de cada carta.'] },
+	{ icone: '🔁', titulo: 'Trocas', texto: [
+		'A aba <b>Trocas</b> junta as <b>cópias que sobram</b> (tudo que passa de 1 de cada carta) e as cartas da sua <b>Lista de Desejos</b> que você ainda não tem.',
+		'Toque em <b>Compartilhar</b> para mandar o texto pronto no WhatsApp ou em um grupo de trocas. Quando trocar, use <b>−</b> (cópia que saiu) ou <b>Recebi</b>.'] },
+	{ icone: '📷', titulo: 'Escanear cartas', texto: [
+		'Na aba <b>Escanear cartas</b>, abra a câmera, encaixe <b>uma carta por vez</b> na moldura e toque em <b>Ler carta</b>. O app lê o número (ex.: 057/198) e o nome e sugere a carta.',
+		'Confira a sugestão e toque em <b>+1</b> para somar uma cópia. Se não achar, procure à mão na mesma tela. As fotos ficam só no seu aparelho.'] },
 	{ icone: '☁', titulo: 'Conta e sincronização', texto: [
 		'Toque na <b>nuvem</b> no topo para entrar ou criar sua conta (e-mail e senha).',
-		'Com a conta, a coleção, a lista de desejos e as coleções escolhidas ficam iguais no celular e no PC (site: ticos1.github.io/projeto-cartas).',
+		'Com a conta, a coleção (com as quantidades), a lista de desejos, os decks e as coleções escolhidas ficam iguais no celular e no PC (site: ticos1.github.io/projeto-cartas).',
 		'Sem internet o app continua funcionando; as mudanças são enviadas quando a conexão voltar.'] },
 	{ icone: '🎨', titulo: 'Temas e logs', texto: [
 		'Em <b>Configurações → Temas</b>: modo claro, escuro ou automático e um tema com as cores de cada coleção (ou a sua cor).',
