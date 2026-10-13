@@ -967,6 +967,7 @@ html.com-anuncio .gaveta { width: min(100vw, calc(50vw + 170px)); }
 .novo-deck .botao { width: auto; margin: 0; padding: 0 16px; flex: none; }
 .icone-deck { display: grid; place-items: center; font-size: 1.8rem; }
 .acoes-deck { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 4px; }
+.acoes-deck #deck-foto { grid-column: 1 / -1; }
 .acoes-deck .botao { margin: 0; padding: 10px 8px; font-size: .88rem; }
 .lista-deck { list-style: none; margin: 8px 0 14px; padding: 0; display: grid; gap: 6px; }
 .item-deck { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 6px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 12px; }

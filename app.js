@@ -1463,6 +1463,7 @@ function telaDeck(id) {
 		<section class="resumo" id="resumo-deck"></section>
 		<div class="acoes-deck">
 			<button class="botao secundario" id="deck-copiar">Copiar lista</button>
+			<button class="botao secundario" id="deck-foto">Compartilhar foto</button>
 			<button class="botao secundario" id="deck-desejos">Faltantes → desejos</button>
 			<button class="botao secundario" id="deck-renomear">Renomear</button>
 			<button class="botao secundario" id="deck-excluir">Excluir</button>
@@ -1478,6 +1479,19 @@ function telaDeck(id) {
 		espera = setTimeout(() => { buscaDeck = $('#busca-deck').value; desenharResultadosDeck(id) }, 150)
 	})
 	$('#deck-copiar').addEventListener('click', async () => avisar(await copiarTexto(textoDoDeck(deck)) ? 'Lista do deck copiada.' : 'Não foi possível copiar.'))
+	$('#deck-foto').addEventListener('click', async evento => {
+		const botao = evento.currentTarget
+		if (!totalDoDeck(deck)) { avisar('O deck está vazio.'); return }
+		botao.disabled = true
+		avisar('Gerando a foto do deck…')
+		let resultado
+		try { resultado = await compartilharFotoDoDeck(deck) } catch { resultado = 'erro' }
+		botao.disabled = false
+		if (resultado === 'compartilhado') avisar('Foto do deck compartilhada.')
+		else if (resultado === 'baixado') avisar('Foto do deck baixada.')
+		else if (resultado === 'erro') avisar('Não foi possível gerar a foto do deck.')
+		registrar(resultado === 'erro' ? 'erro' : 'info', `Foto do deck "${deck.nome}": ${resultado}`)
+	})
 	$('#deck-desejos').addEventListener('click', () => {
 		let n = 0
 		for (const { set, carta } of itensDoDeck(deck)) {
@@ -1591,6 +1605,128 @@ function textoDoDeck(deck) {
 	return `${deck.nome}\n\n${partes.join('\n\n')}\n\nTotal de cartas: ${totalDoDeck(deck)}\n`
 }
 
+// Foto do deck: desenha as cartas (com a quantidade) num canvas e entrega como PNG.
+function carregarImagemParaCanvas(setId, numero) {
+	const fontes = fontesImagem(setId, `${numero}/low.webp`)
+	return new Promise(resolve => {
+		let i = 0
+		const img = new Image()
+		img.crossOrigin = 'anonymous'
+		img.onload = () => resolve(img)
+		img.onerror = () => { if (++i < fontes.length) img.src = fontes[i]; else resolve(null) }
+		img.src = fontes[0]
+	})
+}
+
+function retanguloArredondado(ctx, x, y, w, h, r) {
+	ctx.beginPath()
+	ctx.moveTo(x + r, y)
+	ctx.arcTo(x + w, y, x + w, y + h, r)
+	ctx.arcTo(x + w, y + h, x, y + h, r)
+	ctx.arcTo(x, y + h, x, y, r)
+	ctx.arcTo(x, y, x + w, y, r)
+	ctx.closePath()
+}
+
+async function fotoDoDeck(deck) {
+	const itens = itensDoDeck(deck).sort((a, b) =>
+		['P', 'T', 'E'].indexOf(tipoDoGrupo(a.carta.t)) - ['P', 'T', 'E'].indexOf(tipoDoGrupo(b.carta.t)) || a.carta.nome.localeCompare(b.carta.nome))
+	const imagens = await Promise.all(itens.map(i => carregarImagemParaCanvas(i.set.id, i.carta.n)))
+	const COLUNAS = 6, LARGURA_CARTA = 200, ALTURA_CARTA = 280, ESPACO = 14, MARGEM = 30, TOPO = 110
+	const largura = MARGEM * 2 + COLUNAS * LARGURA_CARTA + (COLUNAS - 1) * ESPACO
+	const linhas = Math.max(1, Math.ceil(itens.length / COLUNAS))
+	const altura = TOPO + linhas * (ALTURA_CARTA + ESPACO) + MARGEM
+	const canvas = document.createElement('canvas')
+	canvas.width = largura
+	canvas.height = altura
+	const ctx = canvas.getContext('2d')
+	ctx.fillStyle = '#14161c'
+	ctx.fillRect(0, 0, largura, altura)
+	ctx.fillStyle = '#fff'
+	ctx.textBaseline = 'alphabetic'
+	ctx.font = 'bold 44px system-ui, sans-serif'
+	ctx.fillText(deck.nome, MARGEM, 62, largura - MARGEM * 2)
+	const porTipo = { P: 0, T: 0, E: 0 }
+	for (const { carta, qtd } of itens) porTipo[tipoDoGrupo(carta.t)] += qtd
+	ctx.fillStyle = '#aab'
+	ctx.font = '26px system-ui, sans-serif'
+	ctx.fillText(`${totalDoDeck(deck)} cartas · Pokémon ${porTipo.P} · Treinador ${porTipo.T} · Energia ${porTipo.E}`, MARGEM, 96)
+	itens.forEach((item, indice) => {
+		const x = MARGEM + (indice % COLUNAS) * (LARGURA_CARTA + ESPACO)
+		const y = TOPO + Math.floor(indice / COLUNAS) * (ALTURA_CARTA + ESPACO)
+		ctx.save()
+		retanguloArredondado(ctx, x, y, LARGURA_CARTA, ALTURA_CARTA, 10)
+		ctx.clip()
+		const img = imagens[indice]
+		if (img) ctx.drawImage(img, x, y, LARGURA_CARTA, ALTURA_CARTA)
+		else {
+			ctx.fillStyle = '#2a2e38'
+			ctx.fillRect(x, y, LARGURA_CARTA, ALTURA_CARTA)
+			ctx.fillStyle = '#fff'
+			ctx.font = '20px system-ui, sans-serif'
+			ctx.textAlign = 'center'
+			ctx.fillText(item.carta.nome, x + LARGURA_CARTA / 2, y + ALTURA_CARTA / 2, LARGURA_CARTA - 16)
+			ctx.textAlign = 'left'
+		}
+		ctx.restore()
+		// Selo com a quantidade no canto da carta.
+		ctx.fillStyle = '#e63946'
+		ctx.beginPath()
+		ctx.arc(x + LARGURA_CARTA - 26, y + 26, 22, 0, Math.PI * 2)
+		ctx.fill()
+		ctx.strokeStyle = '#fff'
+		ctx.lineWidth = 3
+		ctx.stroke()
+		ctx.fillStyle = '#fff'
+		ctx.font = 'bold 26px system-ui, sans-serif'
+		ctx.textAlign = 'center'
+		ctx.textBaseline = 'middle'
+		ctx.fillText(`${item.qtd}`, x + LARGURA_CARTA - 26, y + 27)
+		ctx.textAlign = 'left'
+		ctx.textBaseline = 'alphabetic'
+	})
+	// Se alguma imagem de outro endereço sujou o canvas, toBlob falha: tratamos como erro.
+	return new Promise((resolve, reject) => {
+		try { canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('sem imagem')), 'image/png') } catch (erro) { reject(erro) }
+	})
+}
+
+async function compartilharFotoDoDeck(deck) {
+	const nome = `${deck.nome.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'deck'}.png`
+	const blob = await fotoDoDeck(deck)
+	const nativo = window.Capacitor?.isNativePlatform?.() && window.Capacitor.Plugins
+	if (nativo?.Filesystem && nativo?.Share) {
+		try {
+			const base64 = await new Promise((resolve, reject) => {
+				const leitor = new FileReader()
+				leitor.onload = () => resolve(String(leitor.result).split(',')[1])
+				leitor.onerror = reject
+				leitor.readAsDataURL(blob)
+			})
+			const { uri } = await nativo.Filesystem.writeFile({ path: nome, data: base64, directory: 'CACHE' })
+			await nativo.Share.share({ title: deck.nome, files: [uri] })
+			return 'compartilhado'
+		} catch (erro) {
+			return /cancel/i.test(erro?.message || '') ? 'cancelado' : 'erro'
+		}
+	}
+	const arquivo = new File([blob], nome, { type: 'image/png' })
+	if (navigator.canShare?.({ files: [arquivo] })) {
+		try {
+			await navigator.share({ files: [arquivo], title: deck.nome })
+			return 'compartilhado'
+		} catch (erro) {
+			if (erro.name === 'AbortError') return 'cancelado'
+		}
+	}
+	const link = document.createElement('a')
+	link.href = URL.createObjectURL(arquivo)
+	link.download = nome
+	link.click()
+	setTimeout(() => URL.revokeObjectURL(link.href), 1000)
+	return 'baixado'
+}
+
 /* ---------- Aba: Como usar o app (tutorial) ---------- */
 const PASSOS_TUTORIAL = [
 	{ icone: '☰', titulo: 'Navegue pelas abas', texto: [
@@ -1616,7 +1752,7 @@ const PASSOS_TUTORIAL = [
 	{ icone: '🃏', titulo: 'Decks', texto: [
 		'Na aba <b>Decks</b>, crie um deck com um nome, busque as cartas e use <b>+</b> e <b>−</b> para escolher quantas cópias.',
 		'O app conta as 60 cartas, separa Pokémon, Treinador e Energia e avisa se passar de 4 cópias com o mesmo nome.',
-		'Mostra quais cartas você já tem, manda as que faltam para a <b>Lista de Desejos</b> e copia a lista do deck para compartilhar.'] },
+		'Mostra quais cartas você já tem, manda as que faltam para a <b>Lista de Desejos</b> e copia a lista do deck ou compartilha uma <b>foto</b> dele.'] },
 	{ icone: '☁', titulo: 'Conta e sincronização', texto: [
 		'Toque na <b>nuvem</b> no topo para entrar ou criar sua conta (e-mail e senha).',
 		'Com a conta, a coleção, a lista de desejos e as coleções escolhidas ficam iguais no celular e no PC (site: ticos1.github.io/projeto-cartas).',
