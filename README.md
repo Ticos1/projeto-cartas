@@ -112,11 +112,15 @@ Linhas não encontradas aparecem numa lista; o resto vira um deck novo.
 
 ## Escanear cartas
 
-Aba **Escanear cartas** (☰). **Abrir a câmera** mostra o vídeo ao vivo com uma moldura no formato da carta; **Ler carta**
-recorta a moldura e lê o texto com [Tesseract.js](https://github.com/naptha/tesseract.js) (baixado da jsDelivr só na
+Aba **Escanear cartas** (☰). Ao abrir a aba, a câmera já aparece dentro dela com uma moldura no formato da carta (e um botão
+de lanterna, quando o aparelho tem). O app lê sozinho um quadro a cada instante (primeiro o rodapé com o número; se achar, a faixa
+do nome) e, quando reconhece, mostra a carta **embaixo da câmera** com as mesmas opções da carta grande: marcar como "tenho",
+quantidade, ★ Lista de Desejos e comprar na Liga / MYP; as outras sugestões ficam em "Não é essa?". Para não trocar de carta por
+um dígito mal lido, número + total + nome valem na hora; só número + total precisa aparecer igual em dois quadros seguidos.
+O texto é lido com [Tesseract.js](https://github.com/naptha/tesseract.js) (baixado da jsDelivr só na
 primeira vez, depois fica no cache; precisa de internet nessa primeira vez). `reconhecerCartas` (`js/23-reconhecer-logica.js`)
 procura o número impresso (`057/198`, corrigindo O→0 e I→1) e o nome, e cruza com `data/cartas.json`: número + total do set
-vale 10 pontos, nome inteiro soma 6. Mostra até 5 sugestões (empate: coleções não escondidas, depois as mais novas) com **+1**.
+vale 10 pontos, nome inteiro soma 6. Até 5 sugestões (empate: coleções não escondidas, depois as mais novas).
 Também há **Tirar foto** (app da câmera) e **Galeria**, que servem de reserva, e a busca à mão na mesma tela.
 
 - **Permissão:** o APK precisa da permissão `CAMERA` (já no `AndroidManifest.xml`); APKs antigos negam a câmera ao vivo

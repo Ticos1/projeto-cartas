@@ -1,17 +1,17 @@
 'use strict'
 
 /* ---------- Aba: Escanear cartas ---------- */
-// O usuário fotografa a carta (câmera do aparelho ou galeria); um leitor de texto (Tesseract.js,
-// baixado só na primeira vez) lê o número e o nome; o app sugere as cartas prováveis
-// (reconhecerCartas, em 23-reconhecer-logica.js) e cada toque em "+1" soma uma cópia.
-// Dois jeitos de obter a imagem: a câmera ao vivo com uma moldura para encaixar a carta (o recorte
-// sai sempre igual, e é o que lê melhor) ou uma foto do seletor de arquivo (app da câmera / galeria),
-// que serve de reserva quando a câmera ao vivo não está disponível ou foi negada.
+// Ao abrir a aba, a câmera já aparece dentro dela com uma moldura no formato da carta. O app lê sozinho
+// alguns quadros por segundo com um leitor de texto (Tesseract.js, baixado só na primeira vez), procura o
+// número impresso (ex.: 057/198) e o nome e cruza com a lista de cartas (reconhecerCartas, em 23-reconhecer-logica.js).
+// Quando reconhece, a carta aparece embaixo da câmera com as mesmas opções da carta grande: marcar como
+// "tenho", quantidade, lista de desejos e comprar na Liga / MYP.
+// "Tirar foto" e "Galeria" (seletor de arquivo) ficam de reserva quando a câmera ao vivo não está disponível.
 const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'
-let leitor = null              // trabalhador do Tesseract, criado na primeira foto
+let leitor = null              // trabalhador do Tesseract, criado na primeira leitura
 let preparandoLeitor = null
-let sessaoEscaneada = []       // [{ set, n }] cartas somadas nesta visita à aba (para desfazer)
 let lendoFoto = false
+let resultadoEscaneado = null  // { set, n, outras: [{ set, n }] } carta mostrada embaixo da câmera
 
 function carregarScript(url) {
 	return new Promise((resolve, reject) => {
@@ -71,27 +71,35 @@ async function lerTexto(trabalhador, imagem, modo) {
 	return data.text
 }
 
-// Foto → cartas prováveis. Primeiro lê a foto inteira; se não ficar claro, lê também o rodapé (número) e o topo (nome).
-async function reconhecerFoto(origem, aoProgresso) {
+// Regiões da carta para o leitor: [x0, y0, x1, y1, largura, realce, modo]. A região é em frações da imagem;
+// o modo é o do Tesseract (3 = página, 6 = bloco, 7 = linha, 11 = texto solto).
+const LER_NUMERO = [0, 0.86, 0.6, 1, 2400, true, '11']        // canto de baixo à esquerda: onde fica o número
+const LER_RODAPE = [0, 0.84, 1, 1, 2400, true, '11']          // rodapé inteiro (o número muda de lado em algumas cartas)
+const LER_NOME = [0.05, 0.02, 0.8, 0.12, 1200, true, '7']     // faixa do nome
+
+const lerRegiao = (trabalhador, foto, [x0, y0, x1, y1, largura, realce, modo]) =>
+	lerTexto(trabalhador, recorteDaFoto(foto, x0, y0, x1, y1, largura, realce), modo)
+
+// Foto (arquivo) → cartas prováveis. Primeiro lê o rodapé; se não ficar claro, tenta outras regiões.
+async function reconhecerFoto(arquivo, aoProgresso) {
 	aoProgresso('Carregando o leitor de texto… (só na primeira vez; precisa de internet)')
 	const trabalhador = await prepararLeitor()
-	const foto = origem instanceof Blob ? await abrirImagemDaFoto(origem) : origem   // arquivo da foto ou quadro da câmera
+	const foto = await abrirImagemDaFoto(arquivo)
 	aoProgresso('Lendo a carta…')
 	// Cada leitura enxerga coisas diferentes (testado com cartas reais: nenhuma sozinha acerta sempre), então
 	// tentamos várias, da mais certeira para a menos, e paramos quando número + total do set baterem com uma carta.
-	// [x0, y0, x1, y1, largura, realce, modo]: a região é em frações da imagem; o modo é o do Tesseract (3 = página, 6 = bloco, 7 = linha, 11 = texto solto).
 	const LEITURAS = [
-		[0, 0.86, 0.6, 1, 2400, true, '11'],     // canto de baixo à esquerda: onde fica o número
-		[0, 0.86, 1, 1, 2400, true, '11'],       // rodapé inteiro
-		[0, 0.84, 1, 1, 2400, true, '11'],       // rodapé um pouco mais alto
-		[0, 0.88, 1, 1, 2000, true, '6'],        // rodapé como bloco
+		LER_NUMERO,
+		[0, 0.86, 1, 1, 2400, true, '11'],
+		LER_RODAPE,
+		[0, 0.88, 1, 1, 2000, true, '6'],
 		[0, 0, 1, 1, 1400, false, '3'],          // carta inteira (traz o nome)
-		[0.05, 0.02, 0.8, 0.12, 1200, true, '7'], // faixa do nome
+		LER_NOME,
 	]
 	let texto = ''
 	let achadas = []
-	for (const [x0, y0, x1, y1, largura, realce, modo] of LEITURAS) {
-		texto += '\n' + await lerTexto(trabalhador, recorteDaFoto(foto, x0, y0, x1, y1, largura, realce), modo)
+	for (const leitura of LEITURAS) {
+		texto += '\n' + await lerRegiao(trabalhador, foto, leitura)
 		achadas = reconhecerCartas(texto)
 		if (achadas.length && achadas[0].pontos >= 10) break
 		aoProgresso('Lendo com mais cuidado…')
@@ -99,38 +107,83 @@ async function reconhecerFoto(origem, aoProgresso) {
 	return { achadas, texto }
 }
 
-/* ----- Câmera ao vivo com moldura ----- */
-const PROPORCAO_CARTA = 600 / 825   // largura / altura da carta
+/* ----- Câmera ao vivo dentro da aba ----- */
 let fluxoDaCamera = null
+let geracaoDaCamera = 0         // cada abertura ganha um número; uma abertura antiga que termina depois é descartada
+let leiturasSemNumero = 0
+let candidataAnterior = ''      // carta lida no quadro anterior (precisa repetir para valer, se o nome não foi lido)
+let ultimaReconhecida = ''      // última carta que a câmera reconheceu (só troca a carta mostrada quando muda)
+
+const chaveDaCarta = ({ set, carta }) => `${set.id}|${carta.n}`
+const esperar = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+function mensagemDaCamera(texto) {
+	const aviso = $('#camera-aviso')
+	if (aviso) aviso.textContent = texto
+}
 
 function fecharCamera() {
+	geracaoDaCamera++
 	fluxoDaCamera?.getTracks().forEach(faixa => faixa.stop())
 	fluxoDaCamera = null
-	const caixa = $('#camera')
-	if (caixa) { caixa.hidden = true; $('#camera-video').srcObject = null }
+	const video = $('#camera-video')
+	if (video) video.srcObject = null
+	$('#camera-lanterna')?.setAttribute('hidden', '')
 }
 window.addEventListener('hashchange', fecharCamera)
 
-async function abrirCamera() {
-	const status = $('#escanear-status')
+// Ao sair do app (outra tela do celular), solta a câmera; ao voltar para a aba, abre de novo.
+document.addEventListener('visibilitychange', () => {
+	if (document.hidden) fecharCamera()
+	else if (rotaAtual().aba === 'escanear' && $('#camera-video')) ligarCamera()
+})
+
+async function ligarCamera() {
+	fecharCamera()
+	const geracao = geracaoDaCamera
+	const caixa = $('#camera')
 	if (!navigator.mediaDevices?.getUserMedia) {
-		status.textContent = 'Este aparelho não deixa abrir a câmera ao vivo aqui. Use "Tirar foto" ou "Galeria".'
+		caixa.classList.add('sem-camera')
+		mensagemDaCamera('Este aparelho não deixa abrir a câmera aqui. Use "Tirar foto" ou "Galeria" abaixo.')
 		return
 	}
+	mensagemDaCamera('Abrindo a câmera…')
+	let fluxo
 	try {
-		fluxoDaCamera = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false })
+		fluxo = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false })
 	} catch (erro) {
+		if (geracao !== geracaoDaCamera) return
 		registrar('aviso', 'Câmera ao vivo indisponível', textoDe(erro))
-		status.textContent = erro?.name === 'NotAllowedError'
-			? 'A câmera não foi liberada. Libere nas permissões do app (ou atualize o app) ou use "Tirar foto" / "Galeria".'
-			: 'Não consegui abrir a câmera. Use "Tirar foto" ou "Galeria".'
+		caixa.classList.add('sem-camera')
+		mensagemDaCamera(erro?.name === 'NotAllowedError'
+			? 'A câmera não foi liberada. Libere nas permissões do app (ou atualize o app) e toque em "Tentar de novo", ou use "Tirar foto" / "Galeria".'
+			: 'Não consegui abrir a câmera. Toque em "Tentar de novo" ou use "Tirar foto" / "Galeria".')
+		$('#camera-tentar').hidden = false
 		return
 	}
-	status.textContent = ''
+	if (geracao !== geracaoDaCamera || !$('#camera-video')) { fluxo.getTracks().forEach(faixa => faixa.stop()); return }
+	fluxoDaCamera = fluxo
+	caixa.classList.remove('sem-camera')
+	$('#camera-tentar').hidden = true
+	const faixa = fluxo.getVideoTracks()[0]
+	// Foco contínuo (quando o aparelho deixa) ajuda a ler o número pequeno da carta.
+	try { await faixa.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }) } catch { /* sem controle de foco */ }
+	if (faixa.getCapabilities?.().torch) $('#camera-lanterna').hidden = false
 	const video = $('#camera-video')
-	video.srcObject = fluxoDaCamera
-	$('#camera').hidden = false
+	video.srcObject = fluxo
 	video.play().catch(() => {})
+	mensagemDaCamera('Encaixe a carta na moldura')
+	varrerCamera(geracao)
+}
+
+async function alternarLanterna() {
+	const faixa = fluxoDaCamera?.getVideoTracks()[0]
+	if (!faixa) return
+	const ligada = !faixa.getSettings().torch
+	try {
+		await faixa.applyConstraints({ advanced: [{ torch: ligada }] })
+		$('#camera-lanterna').setAttribute('aria-pressed', ligada)
+	} catch { avisar('Não foi possível ligar a lanterna.') }
 }
 
 // Região do vídeo (em pixels do vídeo) que está dentro da moldura, com uma folga em volta.
@@ -148,50 +201,108 @@ function regiaoDaMoldura(video, moldura, folga = 0.06) {
 	return { x: x0, y: y0, largura: x1 - x0, altura: y1 - y0 }
 }
 
-async function lerDaCamera() {
-	if (lendoFoto) return
+function quadroDaCamera() {
 	const video = $('#camera-video')
-	if (!video.videoWidth) return
+	if (!video?.videoWidth || video.paused) return null
 	const { x, y, largura, altura } = regiaoDaMoldura(video, $('#camera-moldura'))
+	if (largura < 50 || altura < 50) return null
 	const quadro = document.createElement('canvas')
 	quadro.width = Math.round(largura)
 	quadro.height = Math.round(altura)
 	quadro.getContext('2d').drawImage(video, x, y, largura, altura, 0, 0, quadro.width, quadro.height)
-	fecharCamera()
-	await processarFoto(quadro)
+	return quadro
 }
+
+// Lê um quadro da câmera: o número primeiro (rápido); se achar, lê também o nome para confirmar ou desempatar.
+async function lerQuadro(trabalhador, quadro) {
+	let texto = await lerRegiao(trabalhador, quadro, LER_NUMERO)
+	let achadas = reconhecerCartas(texto)
+	if (!achadas.length || achadas[0].pontos < 10) {
+		texto += '\n' + await lerRegiao(trabalhador, quadro, LER_RODAPE)
+		achadas = reconhecerCartas(texto)
+	}
+	if (!achadas.length || achadas[0].pontos < 10) return { achadas: [], texto }
+	texto += '\n' + await lerRegiao(trabalhador, quadro, LER_NOME)
+	return { achadas: reconhecerCartas(texto), texto }
+}
+
+// Laço da câmera: enquanto esta abertura da câmera durar (mesma `geracao`), lê um quadro, espera um pouco e repete.
+async function varrerCamera(geracao) {
+	const ativa = () => geracao === geracaoDaCamera
+	try {
+		if (!leitor) mensagemDaCamera('Preparando o leitor… (só na primeira vez; precisa de internet)')
+		const trabalhador = await prepararLeitor()
+		if (ativa()) mensagemDaCamera('Encaixe a carta na moldura')
+		while (ativa()) {
+			const quadro = lendoFoto ? null : quadroDaCamera()
+			if (quadro) await cicloDaCamera(trabalhador, quadro, ativa)
+			await esperar(300)
+		}
+	} catch (erro) {
+		if (!ativa()) return   // saiu da aba no meio da leitura (o leitor foi encerrado)
+		registrar('erro', 'Falha na leitura da câmera', textoDe(erro))
+		mensagemDaCamera('Não foi possível carregar o leitor de texto. Confira a internet (ele é baixado na primeira vez) e toque em "Tentar de novo".')
+		$('#camera-tentar').hidden = false
+	}
+}
+
+async function cicloDaCamera(trabalhador, quadro, ativa) {
+	const { achadas, texto } = await lerQuadro(trabalhador, quadro)
+	if (!ativa()) return
+	if (!achadas.length) {
+		candidataAnterior = ''
+		leiturasSemNumero++
+		if (leiturasSemNumero >= 6) mensagemDaCamera('Aproxime a carta, deixe o número de baixo bem visível e evite reflexo')
+		return
+	}
+	leiturasSemNumero = 0
+	const chave = chaveDaCarta(achadas[0])
+	// Número + total + nome batendo vale na hora; só o número precisa aparecer igual em dois quadros seguidos
+	// (um dígito mal lido num quadro só não troca a carta mostrada).
+	const confirmada = achadas[0].pontos >= 16 || chave === candidataAnterior
+	candidataAnterior = chave
+	if (!confirmada) { mensagemDaCamera('Lendo…'); return }
+	mensagemDaCamera('Carta reconhecida ✓')
+	if (chave === ultimaReconhecida) return
+	ultimaReconhecida = chave
+	registrar('info', `Escanear (câmera): ${achadas[0].carta.nome}`, texto.replace(/\s+/g, ' ').slice(0, 300))
+	navigator.vibrate?.(40)
+	mostrarResultado(achadas)
+}
+
+/* ----- Tela ----- */
+const ICONE_LINK_FORA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>'
 
 function telaEscanear() {
 	definirTopo('Escanear cartas', '', false)
+	fecharCamera()
+	ultimaReconhecida = ''
+	candidataAnterior = ''
+	leiturasSemNumero = 0
 	tela.innerHTML = `
 		<div class="escanear">
-			<p class="dica">Fotografe <b>uma carta por vez</b>, de frente, bem iluminada e ocupando a moldura toda. O app lê o número (ex.: 057/198) e o nome e sugere a carta. Cada toque em <b>+1</b> soma uma cópia à sua coleção.</p>
+			<div class="camera" id="camera">
+				<video id="camera-video" playsinline muted autoplay></video>
+				<div class="camera-moldura" id="camera-moldura"></div>
+				<p class="camera-aviso" id="camera-aviso" role="status"></p>
+				<button class="camera-lanterna" id="camera-lanterna" aria-pressed="false" aria-label="Lanterna" hidden>💡</button>
+				<button class="botao camera-tentar" id="camera-tentar" hidden>Tentar de novo</button>
+			</div>
+			<p class="dica escanear-dica">Coloque <b>uma carta por vez</b> na moldura, de frente e sem reflexo. A carta aparece aqui embaixo quando for reconhecida.</p>
+			<p class="dica" id="escanear-status" role="status"></p>
+			<div id="escanear-resultado"></div>
 			<div class="escanear-botoes">
-				<button class="botao" id="abrir-camera">📷 Abrir a câmera</button>
 				<label class="botao secundario" for="foto-camera">Tirar foto</label>
 				<label class="botao secundario" for="foto-galeria">Galeria</label>
 			</div>
 			<input id="foto-camera" type="file" accept="image/*" capture="environment" hidden>
 			<input id="foto-galeria" type="file" accept="image/*" hidden>
-			<p class="dica" id="escanear-status" role="status"></p>
-			<ul class="lista-deck" id="escanear-sugestoes"></ul>
 			<h2 class="titulo-secao">Ou procure à mão</h2>
 			<input class="busca" id="escanear-busca" type="search" placeholder="Nome ou número da carta" autocomplete="off" enterkeyhint="search">
 			<ul class="lista-deck" id="escanear-busca-resultados"></ul>
-			<div id="escanear-sessao"></div>
-		</div>
-		<div class="camera" id="camera" hidden>
-			<video id="camera-video" playsinline muted autoplay></video>
-			<div class="camera-moldura" id="camera-moldura"></div>
-			<p class="camera-dica">Encaixe a carta na moldura, sem reflexo, e toque em <b>Ler carta</b></p>
-			<div class="camera-botoes">
-				<button class="botao" id="camera-ler">Ler carta</button>
-				<button class="botao secundario" id="camera-fechar">Fechar</button>
-			</div>
 		</div>`
-	$('#abrir-camera').addEventListener('click', abrirCamera)
-	$('#camera-ler').addEventListener('click', lerDaCamera)
-	$('#camera-fechar').addEventListener('click', fecharCamera)
+	$('#camera-tentar').addEventListener('click', ligarCamera)
+	$('#camera-lanterna').addEventListener('click', alternarLanterna)
 	for (const entrada of [$('#foto-camera'), $('#foto-galeria')]) {
 		entrada.addEventListener('change', async evento => {
 			const arquivo = evento.target.files[0]
@@ -204,26 +315,24 @@ function telaEscanear() {
 		clearTimeout(espera)
 		espera = setTimeout(desenharBuscaEscanear, 150)
 	})
-	desenharSessaoEscaneada()
+	desenharResultado()
+	ligarCamera()
 }
 
-async function processarFoto(origem) {
+async function processarFoto(arquivo) {
 	if (lendoFoto) return
 	lendoFoto = true
 	const status = $('#escanear-status')
-	const sugestoes = $('#escanear-sugestoes')
-	sugestoes.innerHTML = ''
 	try {
-		const { achadas, texto } = await reconhecerFoto(origem, mensagem => { if (status) status.textContent = mensagem })
-		registrar('info', `Escanear: ${achadas.length} sugestão(ões)`, texto.replace(/\s+/g, ' ').slice(0, 300))
+		const { achadas, texto } = await reconhecerFoto(arquivo, mensagem => { if (status) status.textContent = mensagem })
+		registrar('info', `Escanear (foto): ${achadas.length} sugestão(ões)`, texto.replace(/\s+/g, ' ').slice(0, 300))
 		if (!$('#escanear-status')) return   // saiu da aba enquanto lia
 		if (!achadas.length) {
 			$('#escanear-status').textContent = 'Não consegui identificar a carta. Tente de novo com mais luz e a carta bem de frente, ou procure à mão abaixo.'
 			return
 		}
-		$('#escanear-status').textContent = achadas.length > 1 ? 'Qual é a sua carta? Toque em +1 na certa:' : 'Achei esta carta:'
-		$('#escanear-sugestoes').innerHTML = achadas.map(({ set, carta }) => linhaDeEscanear(set, carta)).join('')
-		carregarMiniaturas($('#escanear-sugestoes'))
+		$('#escanear-status').textContent = ''
+		mostrarResultado(achadas)
 	} catch (erro) {
 		registrar('erro', 'Falha ao escanear a carta', textoDe(erro))
 		if ($('#escanear-status')) $('#escanear-status').textContent = 'Não foi possível ler a foto agora. Confira a internet (o leitor é baixado na primeira vez) ou procure à mão abaixo.'
@@ -232,13 +341,67 @@ async function processarFoto(origem) {
 	}
 }
 
+// Mostra a carta mais provável embaixo da câmera; as outras sugestões ficam em "Não é essa?".
+function mostrarResultado(achadas) {
+	const [primeira, ...outras] = achadas
+	resultadoEscaneado = { set: primeira.set.id, n: primeira.carta.n, outras: outras.map(({ set, carta }) => ({ set: set.id, n: carta.n })) }
+	desenharResultado()
+}
+
+function cartaDe(setId, n) {
+	const set = dados.sets.find(s => s.id === setId)
+	return { set, carta: set?.cartas.find(c => c.n === n) }
+}
+
+// Mesmas opções da carta grande: marcar "tenho", quantidade, lista de desejos e comprar (só para quem não tem).
+function desenharResultado() {
+	const caixa = $('#escanear-resultado')
+	if (!caixa) return
+	const { set, carta } = resultadoEscaneado ? cartaDe(resultadoEscaneado.set, resultadoEscaneado.n) : {}
+	if (!carta) { caixa.innerHTML = ''; return }
+	const copias = quantidadeDe(set.id, carta.n)
+	const quer = desejada(set.id, carta.n)
+	const liga = linkLiga(set, carta)
+	const outras = resultadoEscaneado.outras.map(({ set: s, n }) => cartaDe(s, n)).filter(o => o.carta)
+	caixa.innerHTML = `
+		<div class="escanear-resultado">
+			<div class="escanear-carta">
+				<span class="item-liga-img escanear-img" data-set="${escapar(set.id)}" data-n="${escapar(carta.n)}"><img alt=""></span>
+				<div class="escanear-texto">
+					<b>${escapar(carta.nome)}</b>
+					<small>${escapar([set.nome, numeroExibido(set, carta), carta.raridade].filter(Boolean).join(' · '))}</small>
+					<span class="${copias ? 'escanear-tem' : 'escanear-falta'}">${copias ? `✓ Você tem esta carta${copias > 1 ? ` (×${copias})` : ''}` : 'Você não tem esta carta'}</span>
+				</div>
+				<button class="escanear-estrela" data-escanear="desejo" aria-pressed="${quer}" aria-label="${quer ? 'Tirar da lista de desejos' : 'Adicionar à lista de desejos'}">★</button>
+			</div>
+			<button class="botao${copias ? ' secundario' : ''}" data-escanear="marcar">${copias ? 'Desmarcar' : 'Marcar como "tenho"'}</button>
+			${copias ? `<div class="zoom-qtd">
+				<span>Quantas cópias você tem</span>
+				<span class="qtd">
+					<button class="qtd-botao" data-escanear="menos" aria-label="Tirar uma cópia">−</button>
+					<b>${copias}</b>
+					<button class="qtd-botao" data-qtd="1" data-escanear="mais" aria-label="Pôr mais uma cópia"${copias >= MAX_COPIAS ? ' disabled' : ''}>+</button>
+				</span>
+			</div>` : `<p class="zoom-lojas-titulo">Comprar em:</p>
+			<div class="zoom-lojas">
+				<a class="botao comprar" href="${escapar(liga.url)}" target="_blank" rel="noopener noreferrer"><span>Liga Pokémon</span>${ICONE_LINK_FORA}</a>
+				<a class="botao comprar" href="${escapar(linkMyp(carta))}" target="_blank" rel="noopener noreferrer"><span>MYP Cards</span>${ICONE_LINK_FORA}</a>
+			</div>
+			${liga.exato ? `<a class="link" href="${escapar(liga.busca)}" target="_blank" rel="noopener noreferrer">Não abriu a carta certa? Buscar pelo nome na Liga</a>` : ''}`}
+			${outras.length ? `<p class="dica escanear-outras-titulo">Não é essa? Toque na certa:</p>
+			<ul class="lista-deck">${outras.map(({ set: s, carta: c }) => linhaDeEscanear(s, c)).join('')}</ul>` : ''}
+		</div>`
+	carregarImagem(caixa.querySelector('.escanear-img img'), set.id, carta.n, 'low')
+	carregarMiniaturas(caixa)
+}
+
 function linhaDeEscanear(set, carta) {
 	const atual = quantidadeDe(set.id, carta.n)
 	return `<li class="item-deck">
 		<span class="item-liga-img" data-set="${escapar(set.id)}" data-n="${escapar(carta.n)}"><img alt="" loading="lazy"></span>
 		<span class="item-liga-texto"><b>${escapar(carta.nome)}</b><small>${escapar([set.sigla || set.nome, numeroExibido(set, carta), carta.raridade].filter(Boolean).join(' · '))}</small>
 			<small class="${atual ? 'deck-tenho' : 'deck-falta'}">${atual ? `Você tem ${atual}` : 'Você não tem'}</small></span>
-		<button class="botao item-liga-abrir" data-escanear="mais" data-set="${escapar(set.id)}" data-n="${escapar(carta.n)}">+1</button>
+		<button class="botao secundario item-liga-abrir" data-escanear="ver" data-set="${escapar(set.id)}" data-n="${escapar(carta.n)}">Ver</button>
 	</li>`
 }
 
@@ -255,38 +418,31 @@ function desenharBuscaEscanear() {
 	carregarMiniaturas(lista)
 }
 
-function desenharSessaoEscaneada() {
-	const caixa = $('#escanear-sessao')
-	if (!caixa) return
-	if (!sessaoEscaneada.length) { caixa.innerHTML = ''; return }
-	const total = sessaoEscaneada.length
-	caixa.innerHTML = `<h2 class="titulo-secao">Somadas agora (${total})</h2>
-		<ul class="lista-deck">${sessaoEscaneada.map(({ set, n }, i) => {
-			const dadosSet = dados.sets.find(s => s.id === set)
-			const carta = dadosSet.cartas.find(c => c.n === n)
-			return `<li class="item-deck">
-				<span class="item-liga-texto"><b>${escapar(carta.nome)}</b><small>${escapar([dadosSet.sigla || dadosSet.nome, numeroExibido(dadosSet, carta)].join(' · '))} · agora ×${quantidadeDe(set, n)}</small></span>
-				<button class="botao secundario item-liga-abrir" data-escanear="desfazer" data-i="${i}">Desfazer</button>
-			</li>`
-		}).reverse().join('')}</ul>`
-}
-
-// Botões "+1" e "Desfazer" (um ouvinte só, para a tela inteira).
+// Botões da carta reconhecida e "Ver" nas listas (um ouvinte só, para a tela inteira).
 tela.addEventListener('click', evento => {
 	const botao = evento.target.closest('button[data-escanear]')
 	if (!botao || rotaAtual().aba !== 'escanear') return
-	if (botao.dataset.escanear === 'mais') {
+	const acao = botao.dataset.escanear
+	if (acao === 'ver') {
+		// Troca a carta mostrada; a que estava vira uma das sugestões.
 		const { set, n } = botao.dataset
-		const nova = definirQuantidade(set, n, quantidadeDe(set, n) + 1)
-		sessaoEscaneada.push({ set, n })
-		const carta = dados.sets.find(s => s.id === set).cartas.find(c => c.n === n)
-		avisar(`${carta.nome}: agora você tem ${nova}`)
-		$('#escanear-sugestoes').innerHTML = ''
-		$('#escanear-status').textContent = ''
-		desenharBuscaEscanear()
-	} else {
-		const [{ set, n }] = sessaoEscaneada.splice(Number(botao.dataset.i), 1)
-		definirQuantidade(set, n, quantidadeDe(set, n) - 1)
+		const anterior = resultadoEscaneado ? [{ set: resultadoEscaneado.set, n: resultadoEscaneado.n }, ...resultadoEscaneado.outras] : []
+		resultadoEscaneado = { set, n, outras: anterior.filter(o => o.set !== set || o.n !== n) }
+		desenharResultado()
+		$('#escanear-resultado').scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+		return
 	}
-	desenharSessaoEscaneada()
+	if (!resultadoEscaneado) return
+	const { set, n } = resultadoEscaneado
+	const { carta } = cartaDe(set, n)
+	if (acao === 'marcar') {
+		const marcada = alternar(set, n)
+		avisar(marcada ? `${carta.nome}: marcada como "tenho" ✓` : `${carta.nome}: desmarcada`)
+	} else if (acao === 'mais' || acao === 'menos') {
+		definirQuantidade(set, n, quantidadeDe(set, n) + (acao === 'mais' ? 1 : -1))
+	} else if (acao === 'desejo') {
+		avisar(alternarDesejo(set, n) ? 'Adicionada à lista de desejos ★' : 'Tirada da lista de desejos')
+	}
+	desenharResultado()
+	desenharBuscaEscanear()
 })
