@@ -9,6 +9,7 @@
 const CHAVE_COLECAO = 'colecao-tcg'
 const CHAVE_DESEJOS = 'colecao-tcg-desejos'
 const CHAVE_ESCONDIDAS = 'colecao-tcg-colecoes-escondidas'
+const CHAVE_DECKS = 'colecao-tcg-decks'
 const CHAVE_LIGA_ABERTAS = 'colecao-tcg-liga-abertas'
 const CHAVE_TEMA = 'colecao-tcg-tema'
 const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
@@ -16,7 +17,7 @@ const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v38'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v39'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -131,6 +132,33 @@ function alternar(setId, numero) {
 // do total oficial, ex.: 133/132). Vem ligado por padrão; a lista guarda os sets DESLIGADOS.
 let semMasterSet = new Set()
 try { semMasterSet = new Set(JSON.parse(ler(CHAVE_SEM_MASTER) || '[]')) } catch { /* padrão: todos ligados */ }
+
+/* ---------- Decks ---------- */
+// decks = { id: { nome, criado, cartas: { 'set|n': quantidade } } }
+// Na nuvem e no backup cada deck vai como { nome, criado, cartas: ['set|n|quantidade', ...] }.
+let decks = {}
+function deckDaNuvem(d) {
+	const cartas = {}
+	for (const item of Array.isArray(d?.cartas) ? d.cartas : []) {
+		const [set, n, qtd] = String(item).split('|')
+		if (set && n && Number(qtd) > 0) cartas[`${set}|${n}`] = Math.min(Number(qtd), 60)
+	}
+	return { nome: String(d?.nome || 'Deck sem nome').slice(0, 60), criado: Number(d?.criado) || Date.now(), cartas }
+}
+const deckParaNuvem = d => ({ nome: d.nome, criado: d.criado, cartas: Object.entries(d.cartas).map(([chave, qtd]) => `${chave}|${qtd}`) })
+function decksDeObjeto(objeto) {
+	const resultado = {}
+	for (const [id, d] of Object.entries(objeto || {})) if (/^[a-z0-9]{4,30}$/.test(id)) resultado[id] = deckDaNuvem(d)
+	return resultado
+}
+const decksParaNuvem = () => Object.fromEntries(Object.entries(decks).map(([id, d]) => [id, deckParaNuvem(d)]))
+try { decks = decksDeObjeto(JSON.parse(ler(CHAVE_DECKS) || '{}')) } catch { decks = {} }
+
+// Salva no aparelho e, com conta, na nuvem (só o deck que mudou; null = excluído).
+function salvarDeck(id) {
+	gravar(CHAVE_DECKS, JSON.stringify(decksParaNuvem()))
+	nuvem?.deckNaNuvem(id, decks[id] ? deckParaNuvem(decks[id]) : null)
+}
 
 /* ---------- Coleções escondidas ---------- */
 // O usuário escolhe quais coleções acompanha. As escondidas somem de Coleções, da Pesquisa e dos filtros
@@ -1317,10 +1345,230 @@ function desenharPesquisa() {
 	}
 }
 
+/* ---------- Aba: Decks ---------- */
+const NOMES_TIPO = { P: 'Pokémon', T: 'Treinador', E: 'Energia' }
+const tipoDoGrupo = t => t === 'EB' ? 'E' : t || 'P'
+let mapaDeCartas = null
+function cartaPorChave(chave) {
+	if (!mapaDeCartas) {
+		mapaDeCartas = new Map()
+		for (const set of dados.sets) for (const carta of set.cartas) mapaDeCartas.set(`${set.id}|${carta.n}`, { set, carta })
+	}
+	return mapaDeCartas.get(chave)
+}
+const totalDoDeck = deck => Object.values(deck.cartas).reduce((soma, q) => soma + q, 0)
+function itensDoDeck(deck) {
+	return Object.entries(deck.cartas).map(([chave, qtd]) => ({ chave, qtd, ...cartaPorChave(chave) })).filter(i => i.carta)
+}
+// Regras básicas do Pokémon TCG: 60 cartas e no máximo 4 com o mesmo nome (energia básica não tem limite).
+function avisosDoDeck(deck) {
+	const avisos = []
+	const total = totalDoDeck(deck)
+	if (total < 60) avisos.push(`Faltam ${60 - total} carta${60 - total > 1 ? 's' : ''} para 60.`)
+	if (total > 60) avisos.push(`O deck tem ${total - 60} carta${total - 60 > 1 ? 's' : ''} a mais (o máximo é 60).`)
+	const porNome = {}
+	for (const { carta, qtd } of itensDoDeck(deck)) if (carta.t !== 'EB') porNome[carta.nome] = (porNome[carta.nome] || 0) + qtd
+	for (const [nome, qtd] of Object.entries(porNome)) if (qtd > 4) avisos.push(`${nome}: ${qtd} cópias (o máximo é 4 com o mesmo nome).`)
+	if (total && !itensDoDeck(deck).some(i => i.carta.t === 'P')) avisos.push('O deck precisa de pelo menos um Pokémon.')
+	return avisos
+}
+const novoIdDeDeck = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+
+function telaDecks() {
+	definirTopo('Decks', '', false)
+	tela.innerHTML = `
+		<form class="novo-deck" id="novo-deck">
+			<input class="busca" id="nome-deck" placeholder="Nome do novo deck" maxlength="60" autocomplete="off" required>
+			<button class="botao" type="submit">Criar deck</button>
+		</form>
+		<div id="conteudo"></div>`
+	$('#novo-deck').addEventListener('submit', evento => {
+		evento.preventDefault()
+		const nome = $('#nome-deck').value.trim()
+		if (!nome) return
+		const id = novoIdDeDeck()
+		decks[id] = { nome, criado: Date.now(), cartas: {} }
+		salvarDeck(id)
+		registrar('info', `Deck criado: ${nome}`)
+		location.hash = `#/deck/${id}`
+	})
+	desenharListaDecks()
+}
+
+function desenharListaDecks() {
+	const conteudo = $('#conteudo')
+	if (!conteudo || rotaAtual().deckId) return
+	const lista = Object.entries(decks).sort((a, b) => b[1].criado - a[1].criado)
+	$('#subtitulo').textContent = lista.length ? `${lista.length} deck${lista.length > 1 ? 's' : ''}` : ''
+	if (!lista.length) {
+		conteudo.innerHTML = `
+			<div class="vazio dica-pesquisa">
+				<div class="icone-grande" aria-hidden="true">🃏</div>
+				<p><b>Nenhum deck ainda</b></p>
+				<p>Dê um nome acima e toque em <b>Criar deck</b>. Depois é só buscar e adicionar as cartas.</p>
+			</div>`
+		return
+	}
+	conteudo.innerHTML = `<ul class="lista-sets">${lista.map(([id, deck]) => {
+		const total = totalDoDeck(deck)
+		const itens = itensDoDeck(deck)
+		const tem = itens.filter(i => tenho(i.set.id, i.carta.n)).length
+		const p = { tem, total: itens.length, pct: itens.length ? Math.floor(tem / itens.length * 100) : 0 }
+		const ok = total === 60 && !avisosDoDeck(deck).length
+		return `<li><a class="item-set" href="#/deck/${id}">
+			<span class="logo-set icone-deck" aria-hidden="true">🃏</span>
+			<span class="item-set-info">
+				<b>${escapar(deck.nome)}</b>
+				<small>${total}/60 cartas${ok ? ' · ✓ pronto' : ''} · você tem ${tem} de ${itens.length} diferentes</small>
+				${barraHtml(p)}
+			</span>
+			<span class="pct${ok ? ' completa' : ''}">${total}</span>
+		</a></li>`
+	}).join('')}</ul>`
+}
+
+let buscaDeck = ''
+function telaDeck(id) {
+	const deck = decks[id]
+	if (!deck) { location.hash = '#/decks'; return }
+	buscaDeck = ''
+	definirTopo(deck.nome, '', true)
+	tela.innerHTML = `
+		<section class="resumo" id="resumo-deck"></section>
+		<div class="acoes-deck">
+			<button class="botao secundario" id="deck-copiar">Copiar lista</button>
+			<button class="botao secundario" id="deck-desejos">Faltantes → desejos</button>
+			<button class="botao secundario" id="deck-renomear">Renomear</button>
+			<button class="botao secundario" id="deck-excluir">Excluir</button>
+		</div>
+		<h2 class="titulo-secao">Adicionar cartas</h2>
+		<input class="busca" id="busca-deck" type="search" placeholder="Nome ou número da carta" autocomplete="off" enterkeyhint="search">
+		<ul class="lista-deck" id="resultados-deck"></ul>
+		<div id="conteudo"></div>`
+
+	let espera = 0
+	$('#busca-deck').addEventListener('input', () => {
+		clearTimeout(espera)
+		espera = setTimeout(() => { buscaDeck = $('#busca-deck').value; desenharResultadosDeck(id) }, 150)
+	})
+	$('#deck-copiar').addEventListener('click', async () => avisar(await copiarTexto(textoDoDeck(deck)) ? 'Lista do deck copiada.' : 'Não foi possível copiar.'))
+	$('#deck-desejos').addEventListener('click', () => {
+		let n = 0
+		for (const { set, carta } of itensDoDeck(deck)) {
+			if (!tenho(set.id, carta.n) && !desejada(set.id, carta.n)) { alternarDesejo(set.id, carta.n); n++ }
+		}
+		avisar(n ? `${n} carta${n > 1 ? 's' : ''} adicionada${n > 1 ? 's' : ''} à lista de desejos ★` : 'Nada a adicionar: você já tem ou já deseja todas.')
+	})
+	$('#deck-renomear').addEventListener('click', () => {
+		const nome = prompt('Novo nome do deck:', deck.nome)?.trim()
+		if (!nome) return
+		deck.nome = nome.slice(0, 60)
+		salvarDeck(id)
+		definirTopo(deck.nome, $('#subtitulo').textContent, true)
+	})
+	$('#deck-excluir').addEventListener('click', () => {
+		if (!confirm(`Excluir o deck "${deck.nome}"? Isso não pode ser desfeito.`)) return
+		delete decks[id]
+		salvarDeck(id)
+		registrar('info', `Deck excluído: ${deck.nome}`)
+		history.back()
+		setTimeout(() => { if (rotaAtual().deckId) location.hash = '#/decks' }, 400)
+	})
+	desenharDeck(id)
+}
+
+// Botões + e − das cartas do deck (um ouvinte só, para a tela inteira).
+tela.addEventListener('click', evento => {
+	const botao = evento.target.closest('button[data-qtd]')
+	const { deckId } = rotaAtual()
+	const deck = decks[deckId]
+	if (!botao || !deck) return
+	const chave = botao.dataset.chave
+	const nova = Math.max(0, Math.min(60, (deck.cartas[chave] || 0) + Number(botao.dataset.qtd)))
+	if (nova) deck.cartas[chave] = nova
+	else delete deck.cartas[chave]
+	salvarDeck(deckId)
+	desenharDeck(deckId)
+})
+
+const controlesQtd = (chave, qtd) => `<span class="qtd">
+	<button class="qtd-botao" data-chave="${escapar(chave)}" data-qtd="-1" aria-label="Tirar uma"${qtd ? '' : ' disabled'}>−</button>
+	<b>${qtd}</b>
+	<button class="qtd-botao" data-chave="${escapar(chave)}" data-qtd="1" aria-label="Pôr mais uma">+</button>
+</span>`
+const linhaDeCarta = (set, carta, chave, qtd) => `<li class="item-deck">
+	<span class="item-liga-img" data-set="${escapar(set.id)}" data-n="${escapar(carta.n)}"><img alt="" loading="lazy"></span>
+	<span class="item-liga-texto"><b>${escapar(carta.nome)}</b><small>${escapar([set.sigla || set.nome, numeroExibido(set, carta)].join(' · '))}</small>
+		<small class="${tenho(set.id, carta.n) ? 'deck-tenho' : 'deck-falta'}">${tenho(set.id, carta.n) ? '✓ Você tem' : 'Você não tem'}</small></span>
+	${controlesQtd(chave, qtd)}
+</li>`
+function carregarMiniaturas(elemento) {
+	for (const caixa of elemento.querySelectorAll('.item-liga-img')) {
+		const img = caixa.querySelector('img')
+		if (!img.src) carregarImagem(img, caixa.dataset.set, caixa.dataset.n, 'low')
+	}
+}
+
+function desenharResultadosDeck(id) {
+	const deck = decks[id]
+	const lista = $('#resultados-deck')
+	if (!lista || !deck) return
+	const texto = semAcento(buscaDeck.trim())
+	if (!texto) { lista.innerHTML = ''; return }
+	const LIMITE = 12
+	const achadas = []
+	for (const set of setsVisiveis()) for (const carta of set.cartas) if (combina(carta, texto)) achadas.push({ set, carta })
+	lista.innerHTML = achadas.length
+		? achadas.slice(0, LIMITE).map(({ set, carta }) => { const chave = `${set.id}|${carta.n}`; return linhaDeCarta(set, carta, chave, deck.cartas[chave] || 0) }).join('') +
+			(achadas.length > LIMITE ? `<li class="dica">Mostrando ${LIMITE} de ${achadas.length}. Digite mais (ex.: o número da carta) para achar mais rápido.</li>` : '')
+		: '<li class="vazio">Nenhuma carta encontrada (a busca usa as coleções escolhidas em Coleções).</li>'
+	carregarMiniaturas(lista)
+}
+
+function desenharDeck(id) {
+	const deck = decks[id]
+	if (!deck || !$('#resumo-deck')) return
+	const total = totalDoDeck(deck)
+	const itens = itensDoDeck(deck)
+	const porTipo = { P: 0, T: 0, E: 0 }
+	for (const { carta, qtd } of itens) porTipo[tipoDoGrupo(carta.t)] += qtd
+	const avisos = avisosDoDeck(deck)
+	$('#subtitulo').textContent = `${total}/60 cartas`
+	$('#resumo-deck').innerHTML = `
+		<div class="resumo-linha"><strong>${total}/60</strong><span>Pokémon ${porTipo.P} · Treinador ${porTipo.T} · Energia ${porTipo.E}</span></div>
+		${barraHtml({ pct: Math.min(100, Math.round(total / 60 * 100)), tem: total, total: 60 })}
+		${avisos.length ? `<ul class="avisos-deck">${avisos.map(a => `<li>${escapar(a)}</li>`).join('')}</ul>` : total === 60 ? '<p class="deck-ok">✓ Deck completo e dentro das regras básicas.</p>' : ''}`
+	const conteudo = $('#conteudo')
+	if (!itens.length) {
+		conteudo.innerHTML = '<p class="vazio">O deck está vazio. Busque cartas acima e toque em <b>+</b> para adicionar.</p>'
+	} else {
+		conteudo.innerHTML = ['P', 'T', 'E'].map(tipo => {
+			const doTipo = itens.filter(i => tipoDoGrupo(i.carta.t) === tipo).sort((a, b) => a.carta.nome.localeCompare(b.carta.nome))
+			if (!doTipo.length) return ''
+			return `<h2 class="titulo-secao">${NOMES_TIPO[tipo]} (${porTipo[tipo]})</h2>
+				<ul class="lista-deck">${doTipo.map(({ set, carta, chave, qtd }) => linhaDeCarta(set, carta, chave, qtd)).join('')}</ul>`
+		}).join('')
+		carregarMiniaturas(conteudo)
+	}
+	desenharResultadosDeck(id)
+}
+
+// Lista no formato usado pelo Pokémon TCG Live: "4 Nome SIGLA número".
+function textoDoDeck(deck) {
+	const itens = itensDoDeck(deck)
+	const partes = ['P', 'T', 'E'].map(tipo => {
+		const doTipo = itens.filter(i => tipoDoGrupo(i.carta.t) === tipo)
+		if (!doTipo.length) return ''
+		const soma = doTipo.reduce((t, i) => t + i.qtd, 0)
+		return `${NOMES_TIPO[tipo]}: ${soma}\n${doTipo.map(i => `${i.qtd} ${i.carta.nome} ${i.set.sigla || i.set.id} ${/^\d+$/.test(i.carta.n) ? parseInt(i.carta.n, 10) : i.carta.n}`).join('\n')}`
+	}).filter(Boolean)
+	return `${deck.nome}\n\n${partes.join('\n\n')}\n\nTotal de cartas: ${totalDoDeck(deck)}\n`
+}
+
 /* ---------- Aba: Como usar o app (tutorial) ---------- */
 const PASSOS_TUTORIAL = [
 	{ icone: '☰', titulo: 'Navegue pelas abas', texto: [
-		'Toque nos <b>três riscos</b> no canto de cima para trocar de aba: Como usar, Pesquisa, Coleções, Lista de Desejos e Configurações.',
+		'Toque nos <b>três riscos</b> no canto de cima para trocar de aba: Como usar, Pesquisa, Coleções, Lista de Desejos, Decks e Configurações.',
 		'O botão <b>voltar</b> do celular volta para a tela anterior (e fecha a carta ampliada ou os menus).'] },
 	{ icone: '✓', titulo: 'Marque as cartas que você tem', texto: [
 		'<b>Toque</b> numa carta para marcar que você tem (ela fica colorida, com um ✓ verde). Toque de novo para desmarcar.',
@@ -1339,6 +1587,10 @@ const PASSOS_TUTORIAL = [
 	{ icone: '★', titulo: 'Lista de Desejos', texto: [
 		'Segure uma carta e espere ela parar de girar: aparece uma <b>estrela</b> no canto de cima. Toque nela para guardar a carta na sua lista.',
 		'Na aba <b>Lista de Desejos</b> você filtra por coleção e raridade e usa <b>Comprar na Liga Pokémon</b> para abrir as cartas uma por uma na Liga (lá, escolha qualidade NM e uma loja do seu estado).'] },
+	{ icone: '🃏', titulo: 'Decks', texto: [
+		'Na aba <b>Decks</b>, crie um deck com um nome, busque as cartas e use <b>+</b> e <b>−</b> para escolher quantas cópias.',
+		'O app conta as 60 cartas, separa Pokémon, Treinador e Energia e avisa se passar de 4 cópias com o mesmo nome.',
+		'Mostra quais cartas você já tem, manda as que faltam para a <b>Lista de Desejos</b> e copia a lista do deck para compartilhar.'] },
 	{ icone: '☁', titulo: 'Conta e sincronização', texto: [
 		'Toque na <b>nuvem</b> no topo para entrar ou criar sua conta (e-mail e senha).',
 		'Com a conta, a coleção, a lista de desejos e as coleções escolhidas ficam iguais no celular e no PC (site: ticos1.github.io/projeto-cartas).',
@@ -1672,6 +1924,8 @@ function rotaAtual() {
 	if (partes[0] === 'set') return { aba: 'colecoes', setId: decodeURIComponent(partes[1] || '') }
 	if (partes[0] === 'colecoes') return { aba: 'colecoes' }
 	if (partes[0] === 'desejos') return { aba: 'desejos', sub: partes[1] === 'comprar' ? 'comprar' : '' }
+	if (partes[0] === 'decks') return { aba: 'decks' }
+	if (partes[0] === 'deck') return { aba: 'decks', deckId: decodeURIComponent(partes[1] || '') }
 	if (partes[0] === 'configuracoes') return { aba: 'configuracoes', sub: partes[1] === 'logs' ? 'logs' : 'temas' }
 	if (partes[0] === 'pesquisa') return { aba: 'pesquisa' }
 	return { aba: 'ajuda' }
@@ -1690,6 +1944,7 @@ function navegar() {
 	if (setId) telaSet(setId)
 	else if (aba === 'colecoes') telaColecoes()
 	else if (aba === 'ajuda') telaComoUsar()
+	else if (aba === 'decks') rotaAtual().deckId ? telaDeck(rotaAtual().deckId) : telaDecks()
 	else if (aba === 'desejos') sub === 'comprar' ? telaComprarNaLiga() : telaDesejos()
 	else if (aba === 'configuracoes') telaConfiguracoes(sub)
 	else telaPesquisa()
@@ -1735,7 +1990,7 @@ function prepararHistorico() {
 	if (history.state?.sobreposicao) history.replaceState({ app: true }, '')
 	if (history.state?.app) return   // recarregou dentro do app: o histórico já é nosso
 	const { setId, aba, sub } = rotaAtual()
-	const abaixo = setId ? '#/colecoes' : aba === 'desejos' && sub === 'comprar' ? '#/desejos' : null
+	const abaixo = setId ? '#/colecoes' : aba === 'desejos' && sub === 'comprar' ? '#/desejos' : rotaAtual().deckId ? '#/decks' : null
 	if (abaixo) {
 		const destino = location.hash
 		history.replaceState({ app: true }, '', abaixo)
@@ -1754,6 +2009,7 @@ $('#voltar').addEventListener('click', () => {
 		const { setId, sub } = rotaAtual()
 		if (setId) location.hash = '#/colecoes'
 		else if (sub === 'comprar') location.hash = '#/desejos'
+		else if (rotaAtual().deckId) location.hash = '#/decks'
 	}, 400)
 })
 
@@ -1862,7 +2118,7 @@ async function entregarArquivo(nome, texto, tipo, titulo) {
 $('#exportar').addEventListener('click', async () => {
 	const cartas = colecaoComoObjeto()
 	const quantidade = Object.values(cartas).reduce((soma, lista) => soma + lista.length, 0)
-	const backup = { app: 'minha-colecao-tcg', versao: 1, exportadoEm: new Date().toISOString(), cartas, desejos: desejosComoObjeto() }
+	const backup = { app: 'minha-colecao-tcg', versao: 1, exportadoEm: new Date().toISOString(), cartas, desejos: desejosComoObjeto(), decks: decksParaNuvem() }
 	const nome = `colecao-tcg-${new Date().toISOString().slice(0, 10)}.json`
 	const resultado = await entregarArquivo(nome, JSON.stringify(backup, null, 1), 'application/json', 'Backup da coleção')
 	if (resultado === 'compartilhado') avisar(`Backup com ${quantidade} cartas exportado.`)
@@ -1897,7 +2153,11 @@ $('#arquivo-backup').addEventListener('change', async evento => {
 			for (const [set, numeros] of Object.entries(backup.desejos)) if (Array.isArray(numeros)) desejos[set] = new Set(numeros.map(String))
 			salvarDesejos()
 		}
-		nuvem?.substituirNaNuvem(colecaoComoObjeto(), desejosComoObjeto())
+		if (backup.decks && typeof backup.decks === 'object') {
+			decks = decksDeObjeto(backup.decks)
+			gravar(CHAVE_DECKS, JSON.stringify(decksParaNuvem()))
+		}
+		nuvem?.substituirNaNuvem(colecaoComoObjeto(), desejosComoObjeto(), decksParaNuvem())
 		fecharMenu()
 		navegar()
 		avisar(`Backup importado: ${quantidade} cartas.`)
@@ -2034,7 +2294,9 @@ function mostrarUsuario(novo) {
 }
 
 // Chegou a coleção da nuvem (de outro aparelho, ou a junção do primeiro login).
-function receberColecao(cartas, semMaster = [], desejosNuvem = {}, escondidasNuvem = []) {
+function receberColecao(cartas, semMaster = [], desejosNuvem = {}, escondidasNuvem = [], decksNuvem = {}) {
+	decks = decksDeObjeto(decksNuvem)
+	gravar(CHAVE_DECKS, JSON.stringify(decksParaNuvem()))
 	escondidas = new Set(escondidasNuvem)
 	gravar(CHAVE_ESCONDIDAS, JSON.stringify(escondidasNuvem))
 	if (pesquisa.set && escondidas.has(pesquisa.set)) pesquisa.set = ''
@@ -2055,6 +2317,7 @@ function receberColecao(cartas, semMaster = [], desejosNuvem = {}, escondidasNuv
 	for (const botao of document.querySelectorAll('.carta')) atualizarCarta(botao)
 	if (!$('#zoom').hidden && cartaAberta) atualizarBotaoZoom()
 	const { aba, setId, sub } = rotaAtual()
+	if (aba === 'decks') { const { deckId } = rotaAtual(); if (deckId) desenharDeck(deckId); else desenharListaDecks() }
 	if (!setId) { if (aba === 'colecoes') { if (!editandoColecoes) desenharColecoes(); else atualizarContagemDasSeries() } else if (aba === 'desejos') sub === 'comprar' ? desenharComprarNaLiga() : desenharDesejos(); else if (aba === 'pesquisa') desenharPesquisa() }
 	atualizarProgressoNaTela()
 }
@@ -2073,6 +2336,7 @@ async function carregarNuvem() {
 		semMasterSetLocal: () => [...semMasterSet],
 		desejosLocal: desejosComoObjeto,
 		escondidasLocal: () => [...escondidas],
+		decksLocal: decksParaNuvem,
 		aoMudarUsuario: mostrarUsuario,
 		aoReceberColecao: receberColecao,
 		aoMudarStatus: mostrarStatus,
@@ -2138,7 +2402,7 @@ $('#form-excluir').addEventListener('submit', async evento => {
 		await nuvem.excluirConta($('#excluir-senha').value)
 		registrar('info', 'Conta excluída')
 		if ($('#excluir-local').checked) {
-			for (const chave of [CHAVE_COLECAO, CHAVE_DESEJOS, CHAVE_ESCONDIDAS, CHAVE_SEM_MASTER, CHAVE_LIGA_ABERTAS, CHAVE_LOGS]) {
+			for (const chave of [CHAVE_COLECAO, CHAVE_DESEJOS, CHAVE_DECKS, CHAVE_ESCONDIDAS, CHAVE_SEM_MASTER, CHAVE_LIGA_ABERTAS, CHAVE_LOGS]) {
 				try { localStorage.removeItem(chave) } catch { /* sem localStorage */ }
 			}
 			alert('Sua conta e seus dados foram excluídos.')

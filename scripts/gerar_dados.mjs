@@ -121,6 +121,8 @@ for (const def of SERIES) {
 					n: localId,
 					nome: n.pt || n['pt-br'] || n.en,
 					raridade: RARIDADES[c.rarity] ?? c.rarity ?? '',
+					// Tipo, para os decks: P = Pokémon, T = Treinador, E = Energia especial, EB = Energia básica
+					t: c.category === 'Trainer' ? 'T' : c.category === 'Energy' ? (c.energyType === 'Normal' ? 'EB' : 'E') : 'P',
 				}
 			})
 			.sort((a, b) => ordenarNumero(a.n, b.n))

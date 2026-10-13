@@ -960,3 +960,24 @@ html.com-anuncio .gaveta { width: min(100vw, calc(50vw + 170px)); }
 .zoom-lojas .botao.comprar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item-liga-botoes { display: flex; flex-direction: column; gap: 6px; flex: none; }
 .item-liga-botoes .botao.item-liga-abrir { text-align: center; }
+
+/* ---------- Decks ---------- */
+.novo-deck { display: flex; gap: 8px; margin-bottom: 8px; }
+.novo-deck .busca { flex: 1; margin: 0; }
+.novo-deck .botao { width: auto; margin: 0; padding: 0 16px; flex: none; }
+.icone-deck { display: grid; place-items: center; font-size: 1.8rem; }
+.acoes-deck { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 4px; }
+.acoes-deck .botao { margin: 0; padding: 10px 8px; font-size: .88rem; }
+.lista-deck { list-style: none; margin: 8px 0 14px; padding: 0; display: grid; gap: 6px; }
+.item-deck { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 6px; background: var(--superficie); border: 1px solid var(--borda); border-radius: 12px; }
+.item-deck .item-liga-img { width: 40px; }
+.deck-tenho { color: var(--ok) !important; font-weight: 600; }
+.deck-falta { color: var(--texto-fraco); }
+.qtd { display: flex; align-items: center; gap: 6px; flex: none; }
+.qtd b { min-width: 20px; text-align: center; font-size: 1rem; }
+.qtd-botao { width: 34px; height: 34px; border: 0; border-radius: 10px; background: var(--superficie-2); color: var(--texto); font-size: 1.2rem; font-weight: 700; line-height: 1; }
+.qtd-botao:disabled { opacity: .35; }
+.qtd-botao[data-qtd="1"] { background: var(--destaque); color: var(--destaque-texto); }
+.avisos-deck { margin: 10px 0 0; padding-left: 18px; color: #e0a020; font-size: .85rem; }
+.deck-ok { margin: 10px 0 0; color: var(--ok); font-weight: 600; font-size: .9rem; }
+.lista-deck .dica { padding: 4px 6px; }

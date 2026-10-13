@@ -90,9 +90,10 @@ export function iniciarNuvem(opcoes) {
 				const atual = await dbSdk.getDoc(documento)
 				const unido = juntar(atual.data()?.cartas, opcoes.colecaoLocal())
 					const escondidasUnidas = [...new Set([...(atual.data()?.colecoesEscondidas || []), ...(opcoes.escondidasLocal?.() || [])])]
+					const decksUnidos = { ...(atual.data()?.decks || {}), ...(opcoes.decksLocal?.() || {}) }
 					const desejosUnidos = juntar(atual.data()?.desejos, opcoes.desejosLocal?.())
 				const semMaster = [...new Set([...(atual.data()?.semMasterSet || []), ...(opcoes.semMasterSetLocal?.() || [])])]
-				await dbSdk.setDoc(documento, { cartas: unido, desejos: desejosUnidos, colecoesEscondidas: escondidasUnidas, semMasterSet: semMaster, atualizadoEm: dbSdk.serverTimestamp() }, { merge: true })
+				await dbSdk.setDoc(documento, { cartas: unido, desejos: desejosUnidos, decks: decksUnidos, colecoesEscondidas: escondidasUnidas, semMasterSet: semMaster, atualizadoEm: dbSdk.serverTimestamp() }, { merge: true })
 				try { localStorage.setItem(chaveJuntou, '1') } catch { /* sem localStorage */ }
 			} catch (erro) {
 				console.warn('Não foi possível juntar com a nuvem agora:', erro)
@@ -100,7 +101,7 @@ export function iniciarNuvem(opcoes) {
 		}
 
 		pararDeOuvir = dbSdk.onSnapshot(documento, { includeMetadataChanges: true }, foto => {
-			if (foto.exists()) avisos.aoReceberColecao(foto.data().cartas || {}, foto.data().semMasterSet || [], foto.data().desejos || {}, foto.data().colecoesEscondidas || [])
+			if (foto.exists()) avisos.aoReceberColecao(foto.data().cartas || {}, foto.data().semMasterSet || [], foto.data().desejos || {}, foto.data().colecoesEscondidas || [], foto.data().decks || {})
 			const pendente = foto.metadata.hasPendingWrites
 			avisos.aoMudarStatus(pendente ? 'sincronizando' : foto.metadata.fromCache ? 'offline' : 'sincronizado')
 		}, erro => {
@@ -130,10 +131,11 @@ export function marcarNaNuvem(setId, numero, tem) {
 }
 
 // Usado ao importar um backup: troca a coleção inteira.
-export function substituirNaNuvem(cartas, desejos) {
+export function substituirNaNuvem(cartas, desejos, decks) {
 	if (!documento) return
 	const dados = { cartas, atualizadoEm: dbSdk.serverTimestamp() }
 	if (desejos) dados.desejos = desejos
+	if (decks) dados.decks = decks
 	dbSdk.setDoc(documento, dados, { mergeFields: Object.keys(dados) })
 		.catch(erro => console.warn('Falha ao salvar na nuvem:', erro))
 }
@@ -175,4 +177,11 @@ export async function excluirConta(senha) {
 	documento = null
 	await authSdk.deleteUser(usuario)
 	try { localStorage.removeItem(`colecao-tcg-juntou-${uid}`) } catch { /* sem localStorage */ }
+}
+
+// Decks: grava só o deck que mudou (null = excluir).
+export function deckNaNuvem(id, deck) {
+	if (!documento) return
+	dbSdk.setDoc(documento, { decks: { [id]: deck ?? dbSdk.deleteField() }, atualizadoEm: dbSdk.serverTimestamp() }, { merge: true })
+		.catch(erro => console.warn('Falha ao salvar na nuvem:', erro))
 }
