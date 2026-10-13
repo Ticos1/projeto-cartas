@@ -23,14 +23,16 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
 
       # Guarda as imagens entre uma publicação e outra, para não baixar tudo de novo.
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: img
           key: imagens-${{ github.run_id }}
@@ -39,7 +41,7 @@ jobs:
       - name: Baixar imagens das cartas
         run: node scripts/baixar_imagens.mjs
 
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: img
           key: imagens-${{ github.run_id }}
@@ -50,15 +52,22 @@ jobs:
           npm install --no-save --no-package-lock sharp@0.33.5
           node scripts/gerar_assinaturas.mjs
 
+      # Firebase e Tesseract servidos pelo próprio site (lib/). O npm ci confere o hash de cada pacote
+      # (bibliotecas/package-lock.json); --ignore-scripts não roda nada dos pacotes na instalação.
+      - name: Copiar as bibliotecas para o site
+        run: |
+          npm ci --prefix bibliotecas --ignore-scripts --no-audit --no-fund
+          node scripts/copiar_bibliotecas.mjs
+
       - name: Montar o site
         run: |
           mkdir _site
-          cp -r index.html privacidade.html styles.css js nuvem.js sincronia.js sw.js manifest.webmanifest icons data img _site/
+          cp -r index.html privacidade.html styles.css js nuvem.js sincronia.js sw.js manifest.webmanifest icons data img lib _site/
           find _site/img -name '*.idioma' -delete
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
 
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

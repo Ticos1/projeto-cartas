@@ -41,6 +41,9 @@ e Promos MEP.
 | `styles.css` | Visual (cores, grade, modo escuro) |
 | `js/` | A lógica do app, em arquivos por assunto (ver "Código do app" abaixo) |
 | `nuvem.js` | Login e sincronização com o Firebase |
+| `firestore.rules`, `firebase.json` | Regras de segurança do Firestore (testadas em `tests/regras/` e publicadas pelo workflow) |
+| `bibliotecas/` | Versões fixas do Firebase e do Tesseract.js, copiadas para `lib/` na publicação |
+| `scripts/copiar_bibliotecas.mjs` | Copia as bibliotecas de `bibliotecas/node_modules` para `lib/` |
 | `sincronia.js` | Regras de junção da coleção local com a da nuvem (sem Firebase, testável) |
 | `data/cartas.json` | Lista de sets e cartas, gerada a partir do TCGdex |
 | `manifest.webmanifest` | Nome e ícone para instalar na tela inicial |
@@ -55,6 +58,8 @@ e Promos MEP.
 | `tests/` | Testes automáticos (`npm test`) |
 | `.github/workflows/testes.yml` | Roda os testes a cada envio e pull request |
 | `.github/workflows/atualizar-cartas.yml` | Toda segunda confere cartas novas na TCGdex e abre um pull request |
+| `.github/workflows/regras-firestore.yml` | Testa as regras do Firestore no emulador e publica no Firebase |
+| `.github/dependabot.yml` | Propõe atualizações das Actions e das bibliotecas |
 | `docs/etapa1-validacao.md` | Análise dos dados em português (Etapa 1) |
 
 ## Código do app (`js/`)
@@ -138,7 +143,7 @@ carregado 2,5 s depois do banco de imagens, para não disputar o celular com a c
 **Desempenho (CPU 6× mais lenta, simulando celular):** antes, a 1ª carta levava ~9 s e as seguintes 4–5 s, e cartas de arte cheia
 caíam no leitor de texto (~13 s por leitura). Agora: montar o banco 3,3 s → 0,6 s, quadros sem esperar o leitor de texto, e o
 recorte pequeno sai direto do vídeo (sem copiar o quadro inteiro).
-O texto é lido com [Tesseract.js](https://github.com/naptha/tesseract.js) (baixado da jsDelivr só na
+O texto é lido com [Tesseract.js](https://github.com/naptha/tesseract.js) (servido pelo próprio site em `lib/`, baixado só na
 primeira vez, depois fica no cache; precisa de internet nessa primeira vez). `reconhecerCartas` (`js/23-reconhecer-logica.js`)
 procura o número impresso (`057/198`, corrigindo O→0 e I→1) e o nome, e cruza com `data/cartas.json`: número + total do set
 vale 10 pontos, nome inteiro soma 6. Até 5 sugestões (empate: coleções não escondidas, depois as mais novas).
@@ -169,9 +174,12 @@ Se uma imagem não estiver na pasta `img/`, o app tenta buscar direto no TCGdex.
 
 ## Testar no computador
 
-Precisa de um servidor simples (abrir o arquivo direto não funciona com service worker):
+Precisa de um servidor simples (abrir o arquivo direto não funciona com service worker). Na primeira vez
+(e quando mudar `bibliotecas/package.json`), copie as bibliotecas para `lib/`:
 
 ```bash
+npm ci --prefix bibliotecas --ignore-scripts
+node scripts/copiar_bibliotecas.mjs
 python3 -m http.server 8000
 ```
 
@@ -191,8 +199,21 @@ que deve ser igual) para os celulares pegarem a versão nova: `node scripts/subi
 ## Login e sincronização (Firebase)
 
 - Projeto Firebase: `colecao-tcg-3bd8b` (login por e-mail/senha + banco Firestore).
-- Cada usuário tem o documento `colecoes/{id do usuário}` com `{ cartas: { idDoSet: [números] } }`.
-- Regras do Firestore: cada pessoa só lê e altera o próprio documento.
+- Cada usuário tem o documento `colecoes/{id do usuário}` com `{ cartas: { idDoSet: [números] }, quantidades, desejos, decks, colecoesEscondidas, semMasterSet, atualizadoEm }`.
+- Regras do Firestore: ficam em **`firestore.rules`** (não edite no console). Cada pessoa só lê, altera e apaga o próprio
+  documento; só os campos acima são aceitos, cada um com o tipo certo e um limite de tamanho (até 300 coleções por campo,
+  200 decks). Testes no emulador: `npm ci --prefix tests/regras` e `npm run test:regras` (precisa do Java).
+  O workflow `regras-firestore.yml` testa a cada mudança e, na branch publicada, publica as regras no Firebase se existir
+  o segredo `FIREBASE_SERVICE_ACCOUNT` (JSON de uma conta de serviço com só o papel *Firebase Rules Admin*).
+- **App Check** (reCAPTCHA v3): impede que scripts usem a `apiKey` pública para criar contas e gravar dados em massa.
+  Fica desligado enquanto `APP_CHECK_CHAVE_SITE` em `nuvem.js` estiver vazia. Para ligar: crie uma chave reCAPTCHA v3 para
+  `ticos1.github.io`, registre-a no Firebase (App Check → Apps → app da Web), ponha a chave do site em `nuvem.js`, publique,
+  acompanhe as métricas do App Check por alguns dias e só então clique em **Aplicar** (enforce) no Authentication e no Firestore.
+- **Senha:** para criar a conta, pelo menos 8 caracteres, com letras e números (`SENHA_MINIMA` e `problemaNaSenha` em `nuvem.js`).
+  A mesma regra deve estar na política de senha do Firebase (Authentication → Configurações → Política de senha), que vale
+  também para quem não usa o app. Quem já tem senha mais curta pode usar "Esqueci minha senha".
+- **Confirmação de e-mail:** ao criar a conta, o app manda o e-mail de confirmação; enquanto não confirmar, o menu mostra o aviso
+  com **Já confirmei** e **Reenviar** (é opcional: nada é bloqueado).
 - No primeiro login em um aparelho, o que já estava marcado nele é somado ao que está na nuvem.
 - Sem internet, as marcações ficam guardadas e são enviadas quando a conexão volta.
 
@@ -280,7 +301,11 @@ Nas séries Escarlate e Violeta e Espada e Escudo o site guarda só a imagem peq
 Em **Coleções**, o botão **Escolher coleções** abre uma lista com um interruptor para cada coleção (e "Todas / Nenhuma" por série). As desligadas somem de Coleções, da Pesquisa e dos filtros; o que já foi marcado continua salvo e a Lista de Desejos não muda. A escolha fica salva no aparelho e sincroniza pela conta (campo `colecoesEscondidas`).
 
 ## Segurança
-- **Dados na nuvem:** as regras do Firestore só deixam cada pessoa ler e escrever o próprio documento (`colecoes/{uid}`). Testado: sem login nada é lido; logado, não dá para ler, listar ou alterar o documento de outra pessoa nem criar outras coleções.
+- **Dados na nuvem:** as regras do Firestore (`firestore.rules`) só deixam cada pessoa ler e escrever o próprio documento (`colecoes/{uid}`), só com os campos conhecidos e com limite de tamanho. Testado no emulador (`tests/regras/`): sem login nada é lido; logado, não dá para ler, listar ou alterar o documento de outra pessoa nem criar outras coleções.
+- **Content-Security-Policy** (no `index.html`): só roda script do próprio site (e o reCAPTCHA do App Check); sem scripts embutidos (a rede de segurança fica em `js/reparo.js`). É a segunda linha de defesa caso algum texto entre na página sem `escapar()`. Ao usar um endereço externo novo, inclua-o na CSP (`tests/seguranca.test.mjs` confere).
+- **Bibliotecas no próprio site:** Firebase e Tesseract.js vêm de `lib/` (versões fixas em `bibliotecas/package-lock.json`, com hash conferido pelo `npm ci`), e não de CDN.
+- **GitHub Actions** fixadas por SHA; o Dependabot (`.github/dependabot.yml`) propõe as atualizações.
+- **Backup importado:** no máximo 5 MB, e só entram coleções e números que existem em `data/cartas.json` (`limparBackup` em `js/10-modelo.js`); o resto é ignorado e o app avisa quantos itens.
 - **Senhas:** ficam só no Firebase Authentication (o app nunca guarda a senha).
 - **Atualização do APK:** o app só baixa APKs de `github.com/Ticos1/projeto-cartas/releases/…` e, antes de abrir o instalador, confere se o arquivo é do mesmo app e assinado com a mesma chave; se não for, apaga o arquivo. O próprio Android também recusa uma atualização assinada com outra chave.
 - **APK:** sem backup automático dos dados do app (`allowBackup=false`), sem tráfego sem criptografia, e só as permissões de internet, de instalar a própria atualização e de câmera (aba Escanear; as imagens não saem do aparelho).

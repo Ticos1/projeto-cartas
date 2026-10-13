@@ -69,37 +69,40 @@ $('#arquivo-backup').addEventListener('change', async evento => {
 	const arquivo = evento.target.files[0]
 	evento.target.value = ''
 	if (!arquivo) return
+	if (arquivo.size > BACKUP_TAMANHO_MAXIMO) {
+		avisar('Esse arquivo é grande demais para ser um backup do app.')
+		registrar('aviso', `Backup recusado: arquivo de ${Math.round(arquivo.size / 1024)} KB`)
+		return
+	}
+	let limpo
 	try {
-		const backup = JSON.parse(await arquivo.text())
-		if (!backup || typeof backup.cartas !== 'object') throw new Error('formato')
-		const novas = {}
-		let quantidade = 0
-		for (const [set, numeros] of Object.entries(backup.cartas)) {
-			if (!Array.isArray(numeros)) continue
-			novas[set] = new Set(numeros.map(String))
-			quantidade += novas[set].size
-		}
-		const atuais = Object.values(colecao).reduce((soma, s) => soma + s.size, 0)
-		const ondeSubstitui = usuario ? ' (no aparelho e na sua conta)' : ''
-		if (!await perguntar({ titulo: 'Importar backup?', texto: `Sua coleção atual${ondeSubstitui} (${atuais} cartas) será substituída pelo backup (${quantidade} cartas).`, confirmar: 'Substituir', perigo: true })) return
-		const lido = lerColecaoSalva({ cartas: backup.cartas, quantidades: backup.quantidades })
-		colecao = lido.cartas
-		quantidades = lido.quantidades
-		salvarColecao()
-		if (backup.desejos && typeof backup.desejos === 'object') {
-			desejos = {}
-			for (const [set, numeros] of Object.entries(backup.desejos)) if (Array.isArray(numeros)) desejos[set] = new Set(numeros.map(String))
-			salvarDesejos()
-		}
-		if (backup.decks && typeof backup.decks === 'object') {
-			decks = decksDeObjeto(backup.decks)
-			gravar(CHAVE_DECKS, JSON.stringify(decksParaNuvem()))
-		}
-		nuvem?.substituirNaNuvem(colecaoComoObjeto(), desejosComoObjeto(), decksParaNuvem(), quantidadesComoObjeto())
-		fecharMenu()
-		navegar()
-		avisar(`Backup importado: ${quantidade} cartas.`)
+		// Só passam sets e cartas que existem na lista do app (limparBackup, em js/10-modelo.js).
+		limpo = limparBackup(JSON.parse(await arquivo.text()))
 	} catch {
 		avisar('Esse arquivo não parece ser um backup válido.')
+		return
 	}
+	const quantidade = Object.values(limpo.cartas).reduce((soma, lista) => soma + lista.length, 0)
+	const atuais = Object.values(colecao).reduce((soma, s) => soma + s.size, 0)
+	const ondeSubstitui = usuario ? ' (no aparelho e na sua conta)' : ''
+	const ignoradas = limpo.descartadas ? ` ${limpo.descartadas} ${limpo.descartadas === 1 ? 'item desconhecido será ignorado' : 'itens desconhecidos serão ignorados'} (cartas ou coleções que não existem no app).` : ''
+	if (!await perguntar({ titulo: 'Importar backup?', texto: `Sua coleção atual${ondeSubstitui} (${atuais} cartas) será substituída pelo backup (${quantidade} cartas).${ignoradas}`, confirmar: 'Substituir', perigo: true })) return
+	const lido = lerColecaoSalva({ cartas: limpo.cartas, quantidades: limpo.quantidades })
+	colecao = lido.cartas
+	quantidades = lido.quantidades
+	salvarColecao()
+	if (limpo.desejos) {
+		desejos = {}
+		for (const [set, numeros] of Object.entries(limpo.desejos)) desejos[set] = new Set(numeros)
+		salvarDesejos()
+	}
+	if (limpo.decks) {
+		decks = decksDeObjeto(limpo.decks)
+		gravar(CHAVE_DECKS, JSON.stringify(decksParaNuvem()))
+	}
+	nuvem?.substituirNaNuvem(colecaoComoObjeto(), limpo.desejos ? desejosComoObjeto() : undefined, limpo.decks ? decksParaNuvem() : undefined, quantidadesComoObjeto())
+	registrar('info', `Backup importado: ${quantidade} cartas`, limpo.descartadas ? `${limpo.descartadas} itens ignorados` : undefined)
+	fecharMenu()
+	navegar()
+	avisar(`Backup importado: ${quantidade} cartas.`)
 })

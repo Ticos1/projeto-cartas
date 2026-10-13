@@ -1,0 +1,35 @@
+# Dependabot: abre pull requests quando sair versão nova das GitHub Actions (fixadas por SHA nos workflows)
+# e das bibliotecas servidas pelo site (bibliotecas/) e usadas nos testes das regras (tests/regras/).
+# Ao atualizar Firebase ou Tesseract, mude também o número da versão nas pastas lib/ usadas em
+# nuvem.js e js/57-aba-escanear.js (os testes avisam se ficarem diferentes) e rode node scripts/subir_versao.mjs.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: claude/pokemon-tcg-pwa-cyu417
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directory: /bibliotecas
+    target-branch: claude/pokemon-tcg-pwa-cyu417
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: npm
+    directory: /tests/regras
+    target-branch: claude/pokemon-tcg-pwa-cyu417
+    schedule:
+      interval: monthly
+    groups:
+      testes-regras:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directory: /android-app
+    target-branch: claude/pokemon-tcg-pwa-cyu417
+    schedule:
+      interval: monthly

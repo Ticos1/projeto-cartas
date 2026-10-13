@@ -7,7 +7,15 @@
 // Quando reconhece, a carta aparece embaixo da câmera com as mesmas opções da carta grande: marcar como
 // "tenho", quantidade, lista de desejos e comprar na Liga / MYP.
 // "Tirar foto" e "Galeria" (seletor de arquivo) ficam de reserva quando a câmera ao vivo não está disponível.
-const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'
+// O Tesseract.js vem do próprio site (lib/, copiado por scripts/copiar_bibliotecas.mjs), não de uma CDN.
+// As pastas levam a versão no nome (bibliotecas/package.json); os testes conferem que batem.
+const TESSERACT = {
+	script: 'lib/tesseract-5.1.1/tesseract.min.js',
+	trabalhador: 'lib/tesseract-5.1.1/worker.min.js',
+	nucleo: 'lib/tesseract-core-5.1.1',
+	idioma: 'lib/tesseract-eng-1.0.0',
+}
+const enderecoCompleto = caminho => new URL(caminho, location.href).href
 let leitor = null              // trabalhador do Tesseract, criado na primeira leitura
 let preparandoLeitor = null
 let lendoFoto = false
@@ -25,8 +33,14 @@ function carregarScript(url) {
 
 function prepararLeitor() {
 	preparandoLeitor ||= (async () => {
-		if (!window.Tesseract) await carregarScript(TESSERACT_URL)
-		leitor = await window.Tesseract.createWorker('eng')
+		if (!window.Tesseract) await carregarScript(TESSERACT.script)
+		// workerBlobURL: false = o trabalhador abre direto do arquivo (a Content-Security-Policy não libera blob:).
+		leitor = await window.Tesseract.createWorker('eng', 1, {
+			workerPath: enderecoCompleto(TESSERACT.trabalhador),
+			corePath: enderecoCompleto(TESSERACT.nucleo),
+			langPath: enderecoCompleto(TESSERACT.idioma),
+			workerBlobURL: false,
+		})
 		return leitor
 	})().catch(erro => { preparandoLeitor = null; throw erro })
 	return preparandoLeitor

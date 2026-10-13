@@ -201,3 +201,69 @@ function progresso(set) {
 	const tem = numeros ? cartas.filter(c => numeros.has(c.n)).length : 0
 	return { tem, total: cartas.length, pct: Math.floor((tem / cartas.length) * 100) }
 }
+
+/* ---------- Backup importado ---------- */
+// O arquivo de backup vem de fora do app (pode ter sido editado ou ser de outro programa), e o que for aceito
+// vai para a nuvem. Por isso só passam sets e números que existem em data/cartas.json, quantidades de 2 a 99
+// e decks com cartas conhecidas. Devolve o backup limpo e quantos itens foram descartados.
+const BACKUP_TAMANHO_MAXIMO = 5 * 1024 * 1024 // 5 MB (um backup com todas as cartas tem bem menos de 1 MB)
+const BACKUP_MAX_DECKS = 200
+const BACKUP_MAX_CARTAS_DECK = 200
+
+function limparBackup(backup) {
+	if (!backup || typeof backup !== 'object' || Array.isArray(backup)) throw new Error('formato')
+	if (!backup.cartas || typeof backup.cartas !== 'object' || Array.isArray(backup.cartas)) throw new Error('formato')
+	const existentes = new Map(dados.sets.map(set => [set.id, new Set(set.cartas.map(c => c.n))]))
+	let descartadas = 0
+	const ehObjeto = valor => valor && typeof valor === 'object' && !Array.isArray(valor)
+
+	// { set: [números] } → só o que existe, sem repetir.
+	const limparLista = tabela => {
+		const resultado = {}
+		if (!ehObjeto(tabela)) return resultado
+		for (const [set, numeros] of Object.entries(tabela)) {
+			if (!Array.isArray(numeros)) { descartadas++; continue }
+			const validos = existentes.get(set)
+			const aceitos = new Set()
+			for (const n of numeros) {
+				if (validos?.has(String(n))) aceitos.add(String(n))
+				else descartadas++
+			}
+			if (aceitos.size) resultado[set] = [...aceitos]
+		}
+		return resultado
+	}
+
+	const cartas = limparLista(backup.cartas)
+	const desejos = backup.desejos === undefined ? undefined : limparLista(backup.desejos)
+
+	const quantidadesLimpas = {}
+	if (ehObjeto(backup.quantidades)) {
+		for (const [set, porNumero] of Object.entries(backup.quantidades)) {
+			if (!ehObjeto(porNumero)) continue
+			for (const [n, q] of Object.entries(porNumero)) {
+				const qtd = Math.min(MAX_COPIAS, Math.floor(Number(q)))
+				if (cartas[set]?.includes(n) && qtd >= 2) (quantidadesLimpas[set] || (quantidadesLimpas[set] = {}))[n] = qtd
+			}
+		}
+	}
+
+	let decksLimpos
+	if (backup.decks !== undefined) {
+		decksLimpos = {}
+		for (const [id, d] of Object.entries(ehObjeto(backup.decks) ? backup.decks : {}).slice(0, BACKUP_MAX_DECKS)) {
+			if (!/^[a-z0-9]{4,30}$/.test(id) || !ehObjeto(d)) { descartadas++; continue }
+			const itens = (Array.isArray(d.cartas) ? d.cartas : []).slice(0, BACKUP_MAX_CARTAS_DECK).filter(item => {
+				const [set, n] = String(item).split('|')
+				const ok = existentes.get(set)?.has(n)
+				if (!ok) descartadas++
+				return ok
+			})
+			decksLimpos[id] = { ...d, cartas: itens }
+		}
+		decksLimpos = decksParaNuvemDe(decksDeObjeto(decksLimpos))
+	}
+
+	return { cartas, quantidades: quantidadesLimpas, desejos, decks: decksLimpos, descartadas }
+}
+const decksParaNuvemDe = lista => Object.fromEntries(Object.entries(lista).map(([id, d]) => [id, deckParaNuvem(d)]))

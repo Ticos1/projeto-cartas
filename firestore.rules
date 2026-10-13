@@ -1,0 +1,48 @@
+rules_version = '2';
+
+// Regras do Firestore do Ticards (projeto colecao-tcg-3bd8b).
+// Este arquivo é a fonte da verdade: o workflow .github/workflows/regras-firestore.yml testa (tests/regras/)
+// e publica estas regras. Não edite as regras direto no console do Firebase, senão a próxima publicação apaga a mudança.
+//
+// Cada pessoa tem só o documento colecoes/{uid}, com os campos que o app grava (nuvem.js):
+//   cartas, quantidades, desejos, decks  → mapas { idDoSet ou idDoDeck: ... }
+//   colecoesEscondidas, semMasterSet     → listas de ids de set
+//   atualizadoEm                         → data da última gravação
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /colecoes/{uid} {
+      allow get, delete: if dono(uid);
+      allow create, update: if dono(uid) && colecaoValida(request.resource.data);
+    }
+
+    // Qualquer outro caminho (outras coleções, listar documentos) fica fechado.
+    match /{documento=**} {
+      allow read, write: if false;
+    }
+
+    function dono(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Limites com folga: hoje são 54 coleções; um deck tem até 60 cartas.
+    function colecaoValida(d) {
+      return d.keys().hasOnly(['cartas', 'quantidades', 'desejos', 'decks', 'colecoesEscondidas', 'semMasterSet', 'atualizadoEm'])
+        && mapaPequeno(d, 'cartas', 300)
+        && mapaPequeno(d, 'quantidades', 300)
+        && mapaPequeno(d, 'desejos', 300)
+        && mapaPequeno(d, 'decks', 200)
+        && listaPequena(d, 'colecoesEscondidas', 300)
+        && listaPequena(d, 'semMasterSet', 300)
+        && (!('atualizadoEm' in d) || d.atualizadoEm is timestamp);
+    }
+
+    function mapaPequeno(d, campo, maximo) {
+      return !(campo in d) || (d[campo] is map && d[campo].size() <= maximo);
+    }
+
+    function listaPequena(d, campo, maximo) {
+      return !(campo in d) || (d[campo] is list && d[campo].size() <= maximo);
+    }
+  }
+}
