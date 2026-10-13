@@ -93,6 +93,19 @@
 		</div>
 	</div>
 
+	<!-- Diálogo do app (no lugar de confirm/prompt/alert do navegador) -->
+	<div class="fundo-escuro dialogo-fundo" id="dialogo" hidden>
+		<form class="dialogo" id="dialogo-form" role="alertdialog" aria-modal="true" aria-labelledby="dialogo-titulo" aria-describedby="dialogo-texto">
+			<h2 id="dialogo-titulo"></h2>
+			<p class="dica" id="dialogo-texto"></p>
+			<input class="busca campo" id="dialogo-campo" type="text" autocomplete="off" hidden>
+			<div class="dialogo-botoes">
+				<button class="botao secundario" type="button" id="dialogo-cancelar">Cancelar</button>
+				<button class="botao" type="submit" id="dialogo-ok">OK</button>
+			</div>
+		</form>
+	</div>
+
 	<!-- Menu (backup e tema) -->
 	<div class="fundo-escuro" id="menu" hidden>
 		<div class="folha" role="dialog" aria-label="Menu">

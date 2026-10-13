@@ -251,8 +251,8 @@ function desenharLogs() {
 		if (resultado === 'baixado') avisar('Logs baixados.')
 		else if (resultado === 'erro') avisar('Não foi possível compartilhar os logs.')
 	})
-	$('#logs-limpar').addEventListener('click', () => {
-		if (!logs.length || !confirm('Apagar todos os registros de logs deste aparelho?')) return
+	$('#logs-limpar').addEventListener('click', async () => {
+		if (!logs.length || !await perguntar({ titulo: 'Apagar logs?', texto: 'Todos os registros de logs deste aparelho serão apagados.', confirmar: 'Apagar', perigo: true })) return
 		logs = []
 		gravar(CHAVE_LOGS, '[]')
 		atualizarListaLogs()

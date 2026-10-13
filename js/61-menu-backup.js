@@ -85,8 +85,8 @@ $('#arquivo-backup').addEventListener('change', async evento => {
 	const quantidade = Object.values(limpo.cartas).reduce((soma, lista) => soma + lista.length, 0)
 	const atuais = Object.values(colecao).reduce((soma, s) => soma + s.size, 0)
 	const ondeSubstitui = usuario ? ' (no aparelho e na sua conta)' : ''
-	const ignoradas = limpo.descartadas ? `\n\n${limpo.descartadas} ${limpo.descartadas === 1 ? 'item desconhecido será ignorado' : 'itens desconhecidos serão ignorados'} (cartas ou coleções que não existem no app).` : ''
-	if (!confirm(`Substituir sua coleção atual${ondeSubstitui} (${atuais} cartas) pelo backup (${quantidade} cartas)?${ignoradas}`)) return
+	const ignoradas = limpo.descartadas ? ` ${limpo.descartadas} ${limpo.descartadas === 1 ? 'item desconhecido será ignorado' : 'itens desconhecidos serão ignorados'} (cartas ou coleções que não existem no app).` : ''
+	if (!await perguntar({ titulo: 'Importar backup?', texto: `Sua coleção atual${ondeSubstitui} (${atuais} cartas) será substituída pelo backup (${quantidade} cartas).${ignoradas}`, confirmar: 'Substituir', perigo: true })) return
 	const lido = lerColecaoSalva({ cartas: limpo.cartas, quantidades: limpo.quantidades })
 	colecao = lido.cartas
 	quantidades = lido.quantidades

@@ -1051,3 +1051,88 @@ html.com-anuncio .gaveta { width: min(100vw, calc(50vw + 170px)); }
 .escanear-resultado .botao.comprar { color: var(--texto); border-color: var(--borda); }
 .escanear-resultado .link { font-size: .8rem; padding: 6px; }
 .escanear-outras-titulo { margin: 12px 0 6px; }
+
+/* ---------- Diálogo do app (confirmar, renomear, avisos) ---------- */
+#dialogo { z-index: 25; align-items: center; padding: 16px; }
+.dialogo {
+	width: 100%;
+	max-width: 380px;
+	padding: 20px 18px 14px;
+	border-radius: 18px;
+	background: var(--superficie);
+	box-shadow: 0 12px 40px rgba(0, 0, 0, .35);
+}
+.dialogo h2 { margin: 0 0 6px; font-size: 1.1rem; }
+.dialogo .dica { margin: 0 0 14px; font-size: .95rem; line-height: 1.45; }
+.dialogo .campo { margin: 2px 0 12px; }
+.dialogo-botoes { display: flex; gap: 8px; }
+.dialogo-botoes .botao { flex: 1; margin: 0; }
+
+/* ---------- Esqueleto da carta enquanto a imagem chega ---------- */
+.carta-img.carregando .sem-imagem { visibility: hidden; }
+.carta-img.carregando::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--superficie) 70%, transparent) 50%, transparent 80%) var(--superficie-2);
+	background-size: 200% 100%;
+	animation: esqueleto 1.3s ease-in-out infinite;
+	pointer-events: none;
+}
+@keyframes esqueleto {
+	from { background-position: 150% 0; }
+	to { background-position: -50% 0; }
+}
+
+/* ---------- Dica do toque longo (primeira vez) ---------- */
+.dica-dedo {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	z-index: 2;
+	width: 46px;
+	height: 46px;
+	margin: -23px 0 0 -23px;
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--destaque) 35%, transparent);
+	box-shadow: 0 0 0 0 color-mix(in srgb, var(--destaque) 60%, transparent);
+	animation: dedo-segurando 1.8s ease-out infinite;
+	pointer-events: none;
+}
+.dica-dedo::after { content: "👆"; position: absolute; left: 12px; top: 18px; font-size: 26px; line-height: 1; }
+@keyframes dedo-segurando {
+	0% { transform: scale(.6); box-shadow: 0 0 0 0 color-mix(in srgb, var(--destaque) 60%, transparent); }
+	30% { transform: scale(1); }
+	70% { transform: scale(1); box-shadow: 0 0 0 18px transparent; }
+	100% { transform: scale(.6); box-shadow: 0 0 0 0 transparent; }
+}
+.balao-segurar {
+	position: absolute;
+	z-index: 15;
+	width: min(380px, calc(100% - 32px));
+	padding: 12px 14px;
+	border-radius: 14px;
+	background: var(--texto);
+	color: var(--fundo);
+	font-size: .9rem;
+	box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+	animation: balao-entra .25s ease-out;
+}
+.balao-segurar::before {
+	content: "";
+	position: absolute;
+	top: -7px;
+	left: var(--seta, 24px);
+	width: 16px;
+	height: 16px;
+	background: inherit;
+	transform: rotate(45deg);
+	border-radius: 3px;
+}
+.balao-segurar p { position: relative; margin: 0 0 8px; }
+.balao-segurar .botao { margin: 0; padding: 9px; width: auto; min-width: 110px; margin-left: auto; }
+@keyframes balao-entra { from { opacity: 0; transform: translateY(6px); } }
+
+@media (prefers-reduced-motion: reduce) {
+	.carta-img.carregando::after, .dica-dedo, .balao-segurar { animation: none; }
+}

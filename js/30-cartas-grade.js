@@ -58,6 +58,7 @@ let inicioDoGestoAberto = null   // onde começou o dedo que abriu a carta (enqu
 function abrirPorToqueLongo(botao) {
 	if (foiToqueLongo) return
 	foiToqueLongo = true
+	dispensarDicaSegurar()
 	inicioDoGestoAberto = toqueLongo?.inicio || null
 	pararToqueLongo()
 	abrirZoom(botao)
@@ -235,4 +236,40 @@ async function fecharZoom(animar = true, forcar = false, veioDoHistorico = false
 	for (const el of [$('#zoom'), $('#zoom-giro'), $('#zoom-detalhes')]) el.getAnimations().forEach(a => a.cancel())
 	if (!veioDoHistorico) liberarSobreposicao()
 	if (rotaAtual().aba === 'desejos' && !rotaAtual().sub) { const y = window.scrollY; desenharDesejos(); window.scrollTo(0, y) }
+}
+
+/* ---------- Dica do toque longo (só na primeira vez) ---------- */
+// Segurar a carta não é um gesto óbvio: na primeira grade que aparece, a primeira carta
+// "pulsa" com um dedo em cima e um balão explica. Some ao tocar em "Entendi" ou ao segurar uma carta.
+function mostrarDicaSegurar() {
+	tirarDicaSegurar()
+	if (ler(CHAVE_DICA_SEGURAR)) return
+	// Espera a tela se desenhar (e a rolagem voltar ao topo) para achar a primeira carta.
+	setTimeout(() => {
+		if (ler(CHAVE_DICA_SEGURAR) || $('.balao-segurar')) return
+		const carta = tela.querySelector('.grade .carta')
+		if (!carta) return
+		const caixa = carta.getBoundingClientRect()
+		if (!caixa.width || caixa.bottom < 0 || caixa.top > innerHeight) return
+		carta.querySelector('.carta-img').insertAdjacentHTML('beforeend', '<span class="dica-dedo" aria-hidden="true"></span>')
+		const balao = document.createElement('div')
+		balao.className = 'balao-segurar'
+		balao.setAttribute('role', 'note')
+		balao.innerHTML = '<p><b>Segure uma carta</b> por meio segundo para vê-la grande, com efeitos, quantidade e preço. Um toque rápido só marca que você tem.</p><button class="botao" type="button">Entendi</button>'
+		balao.style.top = `${caixa.bottom + scrollY + 10}px`
+		const esquerda = Math.max(16, Math.min(caixa.left, innerWidth - 16 - Math.min(380, innerWidth - 32)))
+		balao.style.left = `${esquerda}px`
+		balao.style.setProperty('--seta', `${caixa.left + caixa.width / 2 - esquerda - 8}px`)
+		document.body.appendChild(balao)
+		balao.querySelector('button').addEventListener('click', dispensarDicaSegurar)
+	}, 700)
+}
+
+function tirarDicaSegurar() {
+	document.querySelectorAll('.balao-segurar, .dica-dedo').forEach(el => el.remove())
+}
+
+function dispensarDicaSegurar() {
+	if (!ler(CHAVE_DICA_SEGURAR)) gravar(CHAVE_DICA_SEGURAR, '1')
+	tirarDicaSegurar()
 }

@@ -156,15 +156,15 @@ function telaDeck(id) {
 		}
 		avisar(n ? `${n} carta${n > 1 ? 's' : ''} adicionada${n > 1 ? 's' : ''} à lista de desejos ★` : 'Nada a adicionar: você já tem as cópias necessárias ou já deseja todas.')
 	})
-	$('#deck-renomear').addEventListener('click', () => {
-		const nome = prompt('Novo nome do deck:', deck.nome)?.trim()
+	$('#deck-renomear').addEventListener('click', async () => {
+		const nome = (await perguntar({ titulo: 'Renomear deck', confirmar: 'Salvar', campo: { valor: deck.nome, placeholder: 'Nome do deck', max: 60 } }))?.trim()
 		if (!nome) return
 		deck.nome = nome.slice(0, 60)
 		salvarDeck(id)
 		definirTopo(deck.nome, $('#subtitulo').textContent, true)
 	})
-	$('#deck-excluir').addEventListener('click', () => {
-		if (!confirm(`Excluir o deck "${deck.nome}"? Isso não pode ser desfeito.`)) return
+	$('#deck-excluir').addEventListener('click', async () => {
+		if (!await perguntar({ titulo: 'Excluir deck?', texto: `O deck "${deck.nome}" será apagado. Isso não pode ser desfeito.`, confirmar: 'Excluir', perigo: true })) return
 		delete decks[id]
 		salvarDeck(id)
 		registrar('info', `Deck excluído: ${deck.nome}`)

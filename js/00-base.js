@@ -16,8 +16,9 @@ const CHAVE_SEM_MASTER = 'colecao-tcg-sem-master-set'
 const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
+const CHAVE_DICA_SEGURAR = 'colecao-tcg-dica-segurar'   // já viu (ou já usou) o "segure a carta"
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v52'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v53'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }

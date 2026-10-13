@@ -25,11 +25,13 @@ function carregarEmOrdem(img, fontes, semImagem) {
 	img.src = fontes[0]
 }
 
-// Imagem da carta; enquanto carrega (ou se não existir), aparece o nome da carta.
+// Imagem da carta; enquanto carrega aparece um esqueleto animado e, se não existir, o nome da carta.
 function carregarImagem(img, setId, numero, qualidade) {
-	img.onload = () => img.parentElement.classList.add('com-imagem')
-	img.parentElement.classList.remove('com-imagem')
-	carregarEmOrdem(img, fontesImagem(setId, `${numero}/${qualidade}.webp`), () => { img.hidden = true })
+	const caixa = img.parentElement
+	img.onload = () => { caixa.classList.add('com-imagem'); caixa.classList.remove('carregando') }
+	caixa.classList.remove('com-imagem')
+	caixa.classList.add('carregando')
+	carregarEmOrdem(img, fontesImagem(setId, `${numero}/${qualidade}.webp`), () => { img.hidden = true; caixa.classList.remove('carregando') })
 }
 
 /* ---------- Ajudantes ---------- */
@@ -79,4 +81,83 @@ function definirTopo(titulo, subtitulo, comVoltar) {
 	$('#voltar').hidden = !comVoltar
 	$('#abrir-gaveta').hidden = comVoltar
 	document.title = `${titulo} · Ticards`
+}
+
+/* ---------- Diálogo do app (no lugar de confirm/prompt/alert do navegador) ---------- */
+// Os nativos não seguem o tema e ficam feios no app Android. Devolve uma promessa:
+//  - confirmação: true (confirmou) ou false
+//  - com `campo`: o texto digitado, ou null se cancelou
+//  - com `cancelar: null`: só um botão (aviso), resolve com true
+// Opções: { titulo, texto, confirmar, cancelar, perigo, campo: { valor, placeholder, max } }
+let respostaDoDialogo = null
+
+function perguntar({ titulo = '', texto = '', confirmar = 'OK', cancelar = 'Cancelar', perigo = false, campo = null } = {}) {
+	if (respostaDoDialogo) fecharDialogo(campo ? null : false)
+	prepararDialogo()
+	$('#dialogo-titulo').textContent = titulo
+	$('#dialogo-texto').textContent = texto
+	$('#dialogo-texto').hidden = !texto
+	const entrada = $('#dialogo-campo')
+	entrada.hidden = !campo
+	entrada.value = campo?.valor || ''
+	entrada.placeholder = campo?.placeholder || ''
+	if (campo?.max) entrada.maxLength = campo.max
+	else entrada.removeAttribute('maxlength')
+	$('#dialogo-ok').textContent = confirmar
+	$('#dialogo-ok').classList.toggle('perigo', perigo)
+	$('#dialogo-cancelar').textContent = cancelar || ''
+	$('#dialogo-cancelar').hidden = !cancelar
+	$('#dialogo').hidden = false
+	registrarSobreposicao()
+	if (!semAnimacao()) {
+		$('#dialogo').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160 })
+		$('#dialogo-form').animate([{ opacity: 0, transform: 'scale(.94)' }, { opacity: 1, transform: 'none' }], { duration: 180, easing: 'ease-out' })
+	}
+	if (campo) { entrada.focus(); entrada.select() } else $('#dialogo-ok').focus()
+	return new Promise(resolver => {
+		respostaDoDialogo = { resolver, comCampo: !!campo, soAviso: !cancelar }
+	})
+}
+
+// Fecha o diálogo e entrega a resposta. Quando o fechamento não veio do voltar do celular,
+// espera o app tirar a entrada do histórico antes de responder: assim quem perguntou pode
+// navegar (ex.: history.back() depois de excluir) sem as duas voltas se atropelarem.
+function fecharDialogo(resposta, veioDoHistorico = false) {
+	const pendente = respostaDoDialogo
+	if (!pendente) return
+	respostaDoDialogo = null
+	$('#dialogo').hidden = true
+	if (pendente.soAviso) resposta = true
+	if (veioDoHistorico) { pendente.resolver(resposta); return }
+	liberarSobreposicao()
+	let respondeu = false
+	const responder = () => {
+		if (respondeu) return
+		respondeu = true
+		window.removeEventListener('popstate', responder)
+		pendente.resolver(resposta)
+	}
+	window.addEventListener('popstate', responder)
+	setTimeout(responder, 350)
+}
+
+function cancelarDialogo(veioDoHistorico = false) {
+	fecharDialogo(respostaDoDialogo?.comCampo ? null : false, veioDoHistorico)
+}
+
+let dialogoPreparado = false
+function prepararDialogo() {
+	if (dialogoPreparado) return
+	dialogoPreparado = true
+	$('#dialogo-form').addEventListener('submit', evento => {
+		evento.preventDefault()
+		fecharDialogo(respostaDoDialogo?.comCampo ? $('#dialogo-campo').value : true)
+	})
+	$('#dialogo-cancelar').addEventListener('click', () => cancelarDialogo())
+	$('#dialogo').addEventListener('click', evento => {
+		if (evento.target.id === 'dialogo') cancelarDialogo()
+	})
+	$('#dialogo').addEventListener('keydown', evento => {
+		if (evento.key === 'Escape') { evento.preventDefault(); cancelarDialogo() }
+	})
 }

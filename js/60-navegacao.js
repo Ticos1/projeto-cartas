@@ -37,6 +37,7 @@ function navegar() {
 	else telaPesquisa()
 	marcarAbaNaGaveta(aba)
 	window.scrollTo(0, 0)
+	mostrarDicaSegurar()
 }
 
 window.addEventListener('hashchange', navegar)
@@ -67,7 +68,8 @@ window.addEventListener('popstate', () => {
 	if (entradasDeSobreposicao === 0) return
 	// O voltar do celular já desfez a entrada: só falta esconder o que está aberto.
 	entradasDeSobreposicao--
-	if (!$('#zoom').hidden) fecharZoom(true, true, true)
+	if (!$('#dialogo').hidden) cancelarDialogo(true)
+	else if (!$('#zoom').hidden) fecharZoom(true, true, true)
 	else if (!$('#menu').hidden) fecharMenu(true)
 	else if (!$('#gaveta').hidden) fecharGaveta(true)
 	else if (!$('#escolha').hidden) fecharEscolha(true)
