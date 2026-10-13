@@ -62,6 +62,17 @@ function combina(carta, busca) {
 	return semAcento(carta.nome).includes(busca) || semAcento(carta.n) === busca
 }
 
+// Fala o texto no leitor de tela (TalkBack, VoiceOver), sem mostrar nada na tela.
+// Limpa antes e escreve logo depois para o mesmo texto ser anunciado de novo (ex.: marcar duas cartas iguais).
+let temporizadorAnuncio
+function anunciar(mensagem) {
+	const regiao = $('#anuncio-leitor')
+	if (!regiao) return
+	regiao.textContent = ''
+	clearTimeout(temporizadorAnuncio)
+	temporizadorAnuncio = setTimeout(() => { regiao.textContent = mensagem }, 60)
+}
+
 let temporizadorAviso
 function avisar(mensagem) {
 	const aviso = $('#aviso')

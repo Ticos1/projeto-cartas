@@ -636,6 +636,7 @@ tela.addEventListener('click', evento => {
 		avisar(marcada ? `${carta.nome}: marcada como "tenho" ✓` : `${carta.nome}: desmarcada`)
 	} else if (acao === 'mais' || acao === 'menos') {
 		definirQuantidade(set, n, quantidadeDe(set, n) + (acao === 'mais' ? 1 : -1))
+		anunciarCarta(set, n)
 	} else if (acao === 'desejo') {
 		avisar(alternarDesejo(set, n) ? 'Adicionada à lista de desejos ★' : 'Tirada da lista de desejos')
 	}
