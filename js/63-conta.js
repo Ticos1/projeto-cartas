@@ -134,7 +134,7 @@ $('#botao-cancelar-exclusao').addEventListener('click', () => mostrarFormExcluir
 $('#form-excluir').addEventListener('submit', async evento => {
 	evento.preventDefault()
 	if (!navigator.onLine) { $('#excluir-erro').textContent = 'Conecte-se à internet para excluir a conta.'; return }
-	if (!confirm('Tem certeza? Sua conta e sua coleção na nuvem serão apagadas para sempre.')) return
+	if (!await perguntar({ titulo: 'Excluir sua conta?', texto: 'Sua conta e sua coleção na nuvem serão apagadas para sempre.', confirmar: 'Excluir', perigo: true })) return
 	const botoes = document.querySelectorAll('#form-excluir button')
 	botoes.forEach(b => { b.disabled = true })
 	$('#excluir-erro').textContent = ''
@@ -145,7 +145,7 @@ $('#form-excluir').addEventListener('submit', async evento => {
 			for (const chave of [CHAVE_COLECAO, CHAVE_DESEJOS, CHAVE_DECKS, CHAVE_ESCONDIDAS, CHAVE_SEM_MASTER, CHAVE_LIGA_ABERTAS, CHAVE_LOGS]) {
 				try { localStorage.removeItem(chave) } catch { /* sem localStorage */ }
 			}
-			alert('Sua conta e seus dados foram excluídos.')
+			await perguntar({ titulo: 'Conta excluída', texto: 'Sua conta e seus dados foram excluídos.', cancelar: null })
 			location.reload()
 			return
 		}

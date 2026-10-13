@@ -81,7 +81,7 @@ $('#arquivo-backup').addEventListener('change', async evento => {
 		}
 		const atuais = Object.values(colecao).reduce((soma, s) => soma + s.size, 0)
 		const ondeSubstitui = usuario ? ' (no aparelho e na sua conta)' : ''
-		if (!confirm(`Substituir sua coleção atual${ondeSubstitui} (${atuais} cartas) pelo backup (${quantidade} cartas)?`)) return
+		if (!await perguntar({ titulo: 'Importar backup?', texto: `Sua coleção atual${ondeSubstitui} (${atuais} cartas) será substituída pelo backup (${quantidade} cartas).`, confirmar: 'Substituir', perigo: true })) return
 		const lido = lerColecaoSalva({ cartas: backup.cartas, quantidades: backup.quantidades })
 		colecao = lido.cartas
 		quantidades = lido.quantidades
