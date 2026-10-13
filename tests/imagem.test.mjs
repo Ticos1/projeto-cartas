@@ -89,3 +89,35 @@ test('marca da lista de cartas muda quando a lista muda', () => {
 	assert.notEqual(a, b)
 	assert.match(a, /^\d+-[0-9a-f]+$/)
 })
+
+test('a região da moldura acha a carta mesmo quando o contorno se perde (carta sem borda, arte cheia)', () => {
+	// Carta sem borda clara, com o fundo da mesma cor média: a busca de contornos não tem bordas para achar.
+	const r = amb.avaliar(`(() => {
+		const L = 150, A = 200, x0 = 30, y0 = 30, x1 = 120, y1 = 154
+		const px = desenhar(L, A, (fx, fy) => {
+			const x = fx * L, y = fy * A
+			if (x < x0 || x >= x1 || y < y0 || y >= y1) return [128, 128, 128]
+			const u = (x - x0) / (x1 - x0), v = (y - y0) / (y1 - y0)
+			return CORES[4](0.04 + u * 0.92, 0.04 + v * 0.92)
+		})
+		const regiao = { x0: x0 / L, y0: y0 / A, x1: x1 / L, y1: y1 / A }
+		const com = reconhecerPorImagem(px, L, A, banco, 5, [regiao])
+		return [com[0].indice, com[0].pontos]
+	})()`)
+	assert.equal(r[0], 4)
+	assert.ok(r[1] > 0.9, `nota ${r[1]}`)
+})
+
+test('montar o banco dá o mesmo resultado que normalizar carta por carta', () => {
+	const d = amb.avaliar(`(() => {
+		let maior = 0
+		for (let i = 0; i < banco.n; i++) {
+			const vetor = new Float32Array(banco.tamFina)
+			for (let j = 0; j < banco.tamFina; j++) vetor[j] = banco.fina[i * banco.tamFina + j]
+			const grossa = assinaturaGrossa(vetor)
+			for (let k = 0; k < banco.tamGrossa; k++) maior = Math.max(maior, Math.abs(grossa[k] - banco.grossa[i * banco.tamGrossa + k]))
+		}
+		return maior
+	})()`)
+	assert.ok(d < 1e-5, `diferença ${d}`)
+})

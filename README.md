@@ -118,17 +118,24 @@ Aba **Escanear cartas** (☰). Ao abrir a aba, a câmera já aparece dentro dela
 com o menor número, "camera2 0"), não a grande-angular. Quando reconhece, mostra a carta **embaixo da câmera** com as mesmas opções
 da carta grande: marcar como "tenho", quantidade, ★ Lista de Desejos e comprar na Liga / MYP; as outras sugestões ficam em "Não é essa?".
 
-**Pela imagem (principal, rápido):** `js/24-imagem-logica.js` acha o contorno da carta no quadro (retângulo no formato da carta com as
-bordas mais fortes) e compara a imagem com a **assinatura** de todas as cartas: a cor média de uma grade de 10 × 14 quadradinhos, sem a
+**Pela imagem (principal, rápido):** `js/24-imagem-logica.js` testa a região da **moldura** (onde o usuário encaixa a carta) e os contornos
+achados no quadro (retângulos no formato da carta com as bordas mais fortes) e compara a imagem com a **assinatura** de todas as cartas: a cor média de uma grade de 10 × 14 quadradinhos, sem a
 média de cada cor (luz forte ou fraca dá no mesmo). As assinaturas são geradas na publicação (`scripts/gerar_assinaturas.mjs`, a partir de
 `img/`, em `pages.yml`) e baixadas pelo app só na primeira vez (`data/assinaturas.json` + `data/assinaturas-{hash}.bin`, ~3,6 MB, guardadas
 pelo `sw.js`). Um quadro leva ~0,1 s no computador. Aceita quando a nota passa de 0,6 e fica 0,04 à frente da próxima arte diferente
 (`escolherPelaImagem`); perto do limite, precisa aparecer em dois quadros seguidos. Cartas com a **mesma arte** (reimpressões, energias)
-empatam: aí o leitor de texto lê o número só na região da carta e desempata. Testado com 150 fotos simuladas (carta pequena, torta,
+empatam: a carta aparece na hora e o leitor de texto lê o número em segundo plano (uma vez por carta) e troca para a certa, se for o caso.
+Sem a moldura, cartas de arte cheia (ex, ilustradas) não eram achadas: as bordas do desenho confundiam a busca de contornos. Testado com 150 fotos simuladas (carta pequena, torta,
 desfocada, com reflexo e cor alterada): 95% de acerto no 1º lugar, e a regra aceitou 93% delas sem nenhum erro; e com uma foto real da
 câmera de um celular (Gardevoir ex, número ilegível): reconhecida.
 
 **Pelo texto (reserva):** quando a imagem não basta (ou o banco não carregou), o leitor de texto lê o rodapé e o nome.
+Ele roda **em segundo plano**, uma leitura por vez (1 a 3 s cada no celular): o laço da câmera nunca espera por ele. O leitor só é
+carregado 2,5 s depois do banco de imagens, para não disputar o celular com a câmera na abertura da aba.
+
+**Desempenho (CPU 6× mais lenta, simulando celular):** antes, a 1ª carta levava ~9 s e as seguintes 4–5 s, e cartas de arte cheia
+caíam no leitor de texto (~13 s por leitura). Agora: montar o banco 3,3 s → 0,6 s, quadros sem esperar o leitor de texto, e o
+recorte pequeno sai direto do vídeo (sem copiar o quadro inteiro).
 O texto é lido com [Tesseract.js](https://github.com/naptha/tesseract.js) (baixado da jsDelivr só na
 primeira vez, depois fica no cache; precisa de internet nessa primeira vez). `reconhecerCartas` (`js/23-reconhecer-logica.js`)
 procura o número impresso (`057/198`, corrigindo O→0 e I→1) e o nome, e cruza com `data/cartas.json`: número + total do set
