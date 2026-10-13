@@ -15,6 +15,8 @@ test('acha números no formato impresso na carta', () => {
 test('corrige letras que o OCR confunde com dígitos', () => {
 	assert.deepEqual(numeros('O57/I98'), [{ numero: '057', total: '198' }])
 	assert.deepEqual(numeros('057 | 198'), [{ numero: '057', total: '198' }])
+	assert.deepEqual(numeros('JC 060,132 >'), [{ numero: '060', total: '132' }])
+	assert.deepEqual(numeros('dano 1,5 e 30,0'), [])
 })
 
 test('número + total do set é o sinal mais forte', () => {

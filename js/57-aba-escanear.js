@@ -343,9 +343,11 @@ function lerEmSegundoPlano(tarefa) {
 		.finally(() => { leituraDeTexto = null })
 }
 
-// Cartas com a mesma arte (reimpressões): qual delas o número lido apontou, por grupo. Assim o texto é lido
-// uma vez por carta, e não a cada quadro.
-const desempates = new Map()
+// Cartas com a mesma arte (reimpressões): qual delas o número lido apontou, para a carta que está na moldura agora.
+// Vale enquanto a carta continua ali (sai ao tirar a carta da moldura) e é conferido de novo de tempos em tempos,
+// caso o usuário troque uma impressão pela outra sem tirar a carta do quadro.
+let desempate = null            // { grupo, chave, quadros }
+const CONFERIR_DESEMPATE_A_CADA = 15
 const chaveDoGrupo = gemeas => gemeas.map(chaveDaCarta).sort().join(' ')
 
 // Laço da câmera: enquanto esta abertura da câmera durar (mesma `geracao`), olha um quadro e repete.
@@ -377,6 +379,7 @@ function cicloDaCamera(ativa) {
 	if (!escolha) {
 		gemeasAnteriores = []
 		leiturasSemCarta++
+		if (leiturasSemCarta >= 3) desempate = null   // a carta saiu da moldura
 		if (leiturasSemCarta >= 25) mensagemDaCamera('Encaixe a carta inteira na moldura, de frente e sem reflexo')
 		// De vez em quando, o leitor de texto tenta pelo número (em segundo plano).
 		if (leiturasSemCarta % 10 === 9) lerTextoDaCamera(ativa)
@@ -387,9 +390,9 @@ function cicloDaCamera(ativa) {
 	if (escolha.gemeas.length > 1) {
 		// Mesma arte em mais de uma carta: o número impresso desempata. Enquanto não foi lido, vale a da imagem.
 		const grupo = chaveDoGrupo(escolha.gemeas)
-		const decidida = desempates.get(grupo)
-		if (decidida) principal = escolha.gemeas.find(g => chaveDaCarta(g) === decidida) || principal
-		else desempatarPeloNumero(ativa, escolha, grupo)
+		if (desempate?.grupo !== grupo) desempate = { grupo, chave: null, quadros: 0 }
+		if (desempate.chave) principal = escolha.gemeas.find(g => chaveDaCarta(g) === desempate.chave) || principal
+		if (!desempate.chave || ++desempate.quadros % CONFERIR_DESEMPATE_A_CADA === 0) desempatarPeloNumero(ativa, escolha, grupo)
 	}
 	// Nota alta vale na hora; perto do limite, a carta precisa aparecer em dois quadros seguidos.
 	const confirmada = principal.pontos >= 0.7 || gemeasAnteriores.includes(chaveDaCarta(principal))
@@ -403,12 +406,20 @@ function desempatarPeloNumero(ativa, escolha, grupo) {
 	lerEmSegundoPlano(async trabalhador => {
 		const quadro = quadroDaCamera(FOLGA_DA_IMAGEM)
 		if (!quadro) return
-		const texto = await lerRegiao(trabalhador, recortarRegiao(quadro, escolha.carta.regiao), LER_RODAPE)
-		if (!ativa()) return
-		const pelasLetras = reconhecerCartas(texto).filter(r => r.pontos >= 10).map(chaveDaCarta)
-		const certa = escolha.gemeas.find(g => pelasLetras.includes(chaveDaCarta(g)))
+		// A região achada pela imagem pode ser um pouco menor que a carta e cortar o rodapé: aumenta 8% para cada lado.
+		const r = escolha.carta.regiao
+		const mx = (r.x1 - r.x0) * 0.08, my = (r.y1 - r.y0) * 0.08
+		const carta = recortarRegiao(quadro, { x0: Math.max(0, r.x0 - mx), y0: Math.max(0, r.y0 - my), x1: Math.min(1, r.x1 + mx), y1: Math.min(1, r.y1 + my) })
+		let texto = '', certa = null
+		for (const leitura of [LER_NUMERO, LER_RODAPE]) {
+			texto += '\n' + await lerRegiao(trabalhador, carta, leitura)
+			if (!ativa()) return
+			const pelasLetras = reconhecerCartas(texto).filter(x => x.pontos >= 10).map(chaveDaCarta)
+			certa = escolha.gemeas.find(g => pelasLetras.includes(chaveDaCarta(g)))
+			if (certa) break
+		}
 		if (!certa) return
-		desempates.set(grupo, chaveDaCarta(certa))
+		if (desempate?.grupo === grupo) desempate.chave = chaveDaCarta(certa)
 		// Se a carta mostrada é deste grupo e o número aponta outra, troca.
 		if (resultadoEscaneado && grupo.split(' ').includes(`${resultadoEscaneado.set}|${resultadoEscaneado.n}`) && chaveDaCarta(certa) !== ultimaReconhecida) {
 			apresentar([certa, ...escolha.gemeas.filter(g => g !== certa)], 'texto (desempate)', texto)
@@ -447,6 +458,7 @@ function telaEscanear() {
 	ultimaReconhecida = ''
 	gemeasAnteriores = []
 	leiturasSemCarta = 0
+	desempate = null
 	tela.innerHTML = `
 		<div class="escanear">
 			<div class="camera" id="camera">

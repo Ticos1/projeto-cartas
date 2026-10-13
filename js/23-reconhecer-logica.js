@@ -8,7 +8,8 @@
 // números (O→0, I/l→1), então arrumamos antes de procurar.
 function numerosNoTexto(texto) {
 	const achados = []
-	const limpo = String(texto).replace(/[|\\]/g, '/')
+	// A barra às vezes sai como |, \ ou vírgula ("060,132"); a vírgula só conta entre dois números de 3 dígitos.
+	const limpo = String(texto).replace(/[|\\]/g, '/').replace(/(\d{3}),(?=\d{3}\b)/g, '$1/')
 	for (const m of limpo.matchAll(/([A-Za-z]{0,4}[0-9OoIl]{1,3})\s*\/\s*([A-Za-z]{0,4}[0-9OoIl]{2,3})/g)) {
 		const arrumar = parte => parte.replace(/[Oo]/g, '0').replace(/[Il]/g, '1')
 		const lado = parte => {

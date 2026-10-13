@@ -124,7 +124,9 @@ média de cada cor (luz forte ou fraca dá no mesmo). As assinaturas são gerada
 `img/`, em `pages.yml`) e baixadas pelo app só na primeira vez (`data/assinaturas.json` + `data/assinaturas-{hash}.bin`, ~3,6 MB, guardadas
 pelo `sw.js`). Um quadro leva ~0,1 s no computador. Aceita quando a nota passa de 0,6 e fica 0,04 à frente da próxima arte diferente
 (`escolherPelaImagem`); perto do limite, precisa aparecer em dois quadros seguidos. Cartas com a **mesma arte** (reimpressões, energias)
-empatam: a carta aparece na hora e o leitor de texto lê o número em segundo plano (uma vez por carta) e troca para a certa, se for o caso.
+empatam: a carta aparece na hora e o leitor de texto lê o número em segundo plano e troca para a certa, se for o caso. O desempate vale
+enquanto a carta fica na moldura e é conferido de novo a cada 15 quadros (para quando uma impressão é trocada pela outra). A leitura usa
+a região da carta com 8% de folga (para não cortar o rodapé) e aceita a barra lida como vírgula ("060,132").
 Sem a moldura, cartas de arte cheia (ex, ilustradas) não eram achadas: as bordas do desenho confundiam a busca de contornos. Testado com 150 fotos simuladas (carta pequena, torta,
 desfocada, com reflexo e cor alterada): 95% de acerto no 1º lugar, e a regra aceitou 93% delas sem nenhum erro; e com uma foto real da
 câmera de um celular (Gardevoir ex, número ilegível): reconhecida.
