@@ -2,7 +2,7 @@
 //
 // Ao mudar algum arquivo do app, aumente o número da VERSAO para os celulares
 // baixarem a versão nova.
-const VERSAO = 'v51'
+const VERSAO = 'v52'
 const CACHE_APP = `colecao-app-${VERSAO}`
 const CACHE_IMAGENS = 'colecao-imagens'
 
@@ -10,6 +10,7 @@ const ARQUIVOS_APP = [
 	'./',
 	'index.html',
 	'styles.css',
+	'js/reparo.js',
 	'js/00-base.js',
 	'js/10-modelo.js',
 	'js/20-imagens-ajudantes.js',
@@ -83,13 +84,13 @@ self.addEventListener('fetch', evento => {
 
 	if (url.hostname === 'assets.tcgdex.net' || (url.origin === self.location.origin && url.pathname.includes('/img/'))) {
 		evento.respondWith(imagem(request))
-	} else if ((url.hostname === 'www.gstatic.com' && url.pathname.startsWith('/firebasejs/')) ||
-		(url.hostname === 'cdn.jsdelivr.net' && url.pathname.startsWith('/npm/tesseract')) || url.hostname === 'tessdata.projectnaptha.com') {
-		// Bibliotecas de versão fixa (login e leitor de texto do Escanear): guarda e reutiliza.
-		evento.respondWith(bibliotecaFirebase(request))
+	} else if (url.origin === self.location.origin && url.pathname.includes('/lib/')) {
+		// Bibliotecas (Firebase e leitor de texto do Escanear), servidas pelo próprio site. A pasta de cada
+		// uma leva a versão no nome e nunca muda, então guarda e reutiliza.
+		evento.respondWith(biblioteca(request))
 	} else if (url.origin === self.location.origin && /\/data\/assinaturas-[^/]*\.bin$/.test(url.pathname)) {
 		// Assinaturas das imagens (Escanear): o nome muda quando o conteúdo muda, então guarda e reutiliza.
-		evento.respondWith(bibliotecaFirebase(request))
+		evento.respondWith(biblioteca(request))
 	} else if (url.origin === self.location.origin && url.pathname.endsWith('/data/assinaturas.json')) {
 		evento.respondWith(daRedeOuGuardado(request))
 	} else if (url.origin === self.location.origin) {
@@ -135,8 +136,8 @@ async function imagem(request) {
 	}
 }
 
-// Bibliotecas externas (Firebase, Tesseract): cada versão nunca muda, então guarda e reutiliza.
-async function bibliotecaFirebase(request) {
+// Bibliotecas (Firebase, Tesseract) e assinaturas: cada endereço nunca muda de conteúdo, então guarda e reutiliza.
+async function biblioteca(request) {
 	const cache = await caches.open(CACHE_IMAGENS)
 	const guardado = await cache.match(request.url)
 	if (guardado) return guardado
