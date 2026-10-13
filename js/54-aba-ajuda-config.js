@@ -34,8 +34,8 @@ const PASSOS_TUTORIAL = [
 		'A aba <b>Trocas</b> junta as <b>cópias que sobram</b> (tudo que passa de 1 de cada carta) e as cartas da sua <b>Lista de Desejos</b> que você ainda não tem.',
 		'Toque em <b>Compartilhar</b> para mandar o texto pronto no WhatsApp ou em um grupo de trocas. Quando trocar, use <b>−</b> (cópia que saiu) ou <b>Recebi</b>.'] },
 	{ icone: '📷', titulo: 'Escanear cartas', texto: [
-		'Na aba <b>Escanear cartas</b>, abra a câmera, encaixe <b>uma carta por vez</b> na moldura e toque em <b>Ler carta</b>. O app lê o número (ex.: 057/198) e o nome e sugere a carta.',
-		'Confira a sugestão e toque em <b>+1</b> para somar uma cópia. Se não achar, procure à mão na mesma tela. As fotos ficam só no seu aparelho.'] },
+		'Na aba <b>Escanear cartas</b> a câmera já abre sozinha: coloque <b>uma carta por vez</b> na moldura. O app lê o número (ex.: 057/198) e o nome e mostra a carta logo abaixo.',
+		'Ali você marca como <b>tenho</b>, ajusta as cópias, põe na <b>Lista de Desejos</b> ou compra na Liga / MYP. Se não reconhecer, use <b>Tirar foto</b> ou procure à mão. As imagens ficam só no seu aparelho.'] },
 	{ icone: '☁', titulo: 'Conta e sincronização', texto: [
 		'Toque na <b>nuvem</b> no topo para entrar ou criar sua conta (e-mail e senha).',
 		'Com a conta, a coleção (com as quantidades), a lista de desejos, os decks e as coleções escolhidas ficam iguais no celular e no PC (site: ticos1.github.io/projeto-cartas).',
