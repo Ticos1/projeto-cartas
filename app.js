@@ -17,7 +17,7 @@ const CHAVE_PALETA = 'colecao-tcg-paleta'
 const CHAVE_COR = 'colecao-tcg-cor-destaque'
 const CHAVE_LOGS = 'colecao-tcg-logs'
 const IMAGENS = 'https://assets.tcgdex.net'
-const VERSAO_APP = 'v40'   // mantenha igual à VERSAO do sw.js
+const VERSAO_APP = 'v41'   // mantenha igual à VERSAO do sw.js
 
 let dados = null              // conteúdo de data/cartas.json
 let colecao = {}              // { idDoSet: Set(['001', '002', ...]) }
@@ -1543,11 +1543,11 @@ function desenharResultadosDeck(id) {
 	if (!texto) { lista.innerHTML = ''; return }
 	const LIMITE = 12
 	const achadas = []
-	for (const set of setsVisiveis()) for (const carta of set.cartas) if (combina(carta, texto)) achadas.push({ set, carta })
+	for (const set of dados.sets) for (const carta of set.cartas) if (combina(carta, texto)) achadas.push({ set, carta })
 	lista.innerHTML = achadas.length
 		? achadas.slice(0, LIMITE).map(({ set, carta }) => { const chave = `${set.id}|${carta.n}`; return linhaDeCarta(set, carta, chave, deck.cartas[chave] || 0) }).join('') +
 			(achadas.length > LIMITE ? `<li class="dica">Mostrando ${LIMITE} de ${achadas.length}. Digite mais (ex.: o número da carta) para achar mais rápido.</li>` : '')
-		: '<li class="vazio">Nenhuma carta encontrada (a busca usa as coleções escolhidas em Coleções).</li>'
+		: '<li class="vazio">Nenhuma carta encontrada.</li>'
 	carregarMiniaturas(lista)
 }
 
