@@ -214,7 +214,7 @@
 				}))
 			}).then(function () {
 				// Baixa de novo os arquivos do app, ignorando a memória do navegador (que guarda por 10 min).
-				var arquivos = ['index.html', 'styles.css', 'js/00-base.js', 'js/10-modelo.js', 'js/20-imagens-ajudantes.js', 'js/21-trocas-logica.js', 'js/22-importar-deck-logica.js', 'js/23-reconhecer-logica.js', 'js/30-cartas-grade.js', 'js/35-efeitos.js', 'js/40-liga-e-carta-grande.js', 'js/50-aba-colecoes.js', 'js/51-aba-pesquisa.js', 'js/52-aba-desejos.js', 'js/53-aba-decks.js', 'js/54-aba-ajuda-config.js', 'js/55-tela-set.js', 'js/56-aba-trocas.js', 'js/57-aba-escanear.js', 'js/60-navegacao.js', 'js/61-menu-backup.js', 'js/62-tema.js', 'js/63-conta.js', 'js/70-app-android.js', 'js/71-anuncio.js', 'js/99-iniciar.js', 'nuvem.js', 'sincronia.js', 'sw.js', 'data/cartas.json', 'manifest.webmanifest']
+				var arquivos = ['index.html', 'styles.css', 'js/00-base.js', 'js/10-modelo.js', 'js/20-imagens-ajudantes.js', 'js/21-trocas-logica.js', 'js/22-importar-deck-logica.js', 'js/23-reconhecer-logica.js', 'js/24-imagem-logica.js', 'js/30-cartas-grade.js', 'js/35-efeitos.js', 'js/40-liga-e-carta-grande.js', 'js/50-aba-colecoes.js', 'js/51-aba-pesquisa.js', 'js/52-aba-desejos.js', 'js/53-aba-decks.js', 'js/54-aba-ajuda-config.js', 'js/55-tela-set.js', 'js/56-aba-trocas.js', 'js/57-aba-escanear.js', 'js/60-navegacao.js', 'js/61-menu-backup.js', 'js/62-tema.js', 'js/63-conta.js', 'js/70-app-android.js', 'js/71-anuncio.js', 'js/99-iniciar.js', 'nuvem.js', 'sincronia.js', 'sw.js', 'data/cartas.json', 'manifest.webmanifest']
 				return Promise.all(arquivos.map(function (a) { return passo(fetch(a, { cache: 'reload' })) }))
 			}).then(function () { location.reload() })
 		}
@@ -237,6 +237,7 @@
 	<script src="js/21-trocas-logica.js"></script>
 	<script src="js/22-importar-deck-logica.js"></script>
 	<script src="js/23-reconhecer-logica.js"></script>
+	<script src="js/24-imagem-logica.js"></script>
 	<script src="js/30-cartas-grade.js"></script>
 	<script src="js/35-efeitos.js"></script>
 	<script src="js/40-liga-e-carta-grande.js"></script>

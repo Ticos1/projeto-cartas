@@ -10,7 +10,7 @@ const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 export const cartasReais = JSON.parse(fs.readFileSync(path.join(raiz, 'data/cartas.json'), 'utf8'))
 
 // Arquivos que não mexem na tela (podem rodar sem DOM).
-const ARQUIVOS = ['00-base', '10-modelo', '20-imagens-ajudantes', '21-trocas-logica', '22-importar-deck-logica', '23-reconhecer-logica']
+const ARQUIVOS = ['00-base', '10-modelo', '20-imagens-ajudantes', '21-trocas-logica', '22-importar-deck-logica', '23-reconhecer-logica', '24-imagem-logica']
 
 export function criarAmbiente({ dados } = {}) {
 	const armazenamento = new Map()
@@ -27,6 +27,7 @@ export function criarAmbiente({ dados } = {}) {
 		setTimeout: () => 0,
 		clearTimeout() {},
 		Date, Math, JSON, Set, Map, Object, Array, Number, String, RegExp, Error, Promise,
+		Float32Array, Float64Array, Uint8Array, Int8Array,
 		avisos,
 	}
 	vm.createContext(contexto)

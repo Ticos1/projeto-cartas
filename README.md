@@ -49,6 +49,7 @@ e Promos MEP.
 | `scripts/baixar_imagens.mjs` | Baixa as imagens das cartas (roda no GitHub Actions) |
 | `.github/workflows/pages.yml` | Publica o app no GitHub Pages |
 | `scripts/gerar_dados.mjs` | Gera o `data/cartas.json` (para atualizar ou adicionar sets) |
+| `scripts/gerar_assinaturas.mjs` | Gera as assinaturas das imagens para o Escanear reconhecer a carta pela imagem (roda no GitHub Actions) |
 | `scripts/comparar_dados.mjs` | Compara duas versões da lista de cartas e resume o que mudou |
 | `scripts/subir_versao.mjs` | Sobe o número da versão do app (`sw.js` e `js/00-base.js`) |
 | `tests/` | Testes automáticos (`npm test`) |
@@ -68,7 +69,7 @@ o número no começo do nome é a ordem). Arquivos novos entram em três lugares
 | `00-base` | Constantes, estado, armazenamento e logs |
 | `10-modelo` | Coleção (com quantidades), desejos, decks, coleções escondidas, master set |
 | `20-imagens-ajudantes` | Imagens e funções pequenas (busca, textos) |
-| `21-trocas-logica`, `22-importar-deck-logica`, `23-reconhecer-logica` | **Lógica sem tela** de Trocas, Importar deck e Escanear (testada em `tests/`) |
+| `21-trocas-logica`, `22-importar-deck-logica`, `23-reconhecer-logica`, `24-imagem-logica` | **Lógica sem tela** de Trocas, Importar deck e Escanear (pelo texto e pela imagem; testada em `tests/`) |
 | `30-cartas-grade`, `35-efeitos`, `40-liga-e-carta-grande` | Grade de cartas, toque longo, carta grande, efeitos de raridade e botões de compra |
 | `50` a `57` | Uma aba por arquivo: Coleções, Pesquisa, Desejos, Decks, Como usar/Configurações, tela do set, Trocas, Escanear |
 | `60-navegacao`, `61-menu-backup`, `62-tema`, `63-conta` | Rotas e botão voltar, menu e backup, temas, login e sincronização |
@@ -112,11 +113,22 @@ Linhas não encontradas aparecem numa lista; o resto vira um deck novo.
 
 ## Escanear cartas
 
-Aba **Escanear cartas** (☰). Ao abrir a aba, a câmera já aparece dentro dela com uma moldura no formato da carta (e um botão
-de lanterna, quando o aparelho tem). O app lê sozinho um quadro a cada instante (primeiro o rodapé com o número; se achar, a faixa
-do nome) e, quando reconhece, mostra a carta **embaixo da câmera** com as mesmas opções da carta grande: marcar como "tenho",
-quantidade, ★ Lista de Desejos e comprar na Liga / MYP; as outras sugestões ficam em "Não é essa?". Para não trocar de carta por
-um dígito mal lido, número + total + nome valem na hora; só número + total precisa aparecer igual em dois quadros seguidos.
+Aba **Escanear cartas** (☰). Ao abrir a aba, a câmera já aparece dentro dela com uma moldura no formato da carta, mais os botões
+🔄 (trocar de câmera, quando há mais de uma atrás; a escolha fica salva) e 💡 lanterna. O app abre a **câmera principal** (a de trás
+com o menor número, "camera2 0"), não a grande-angular. Quando reconhece, mostra a carta **embaixo da câmera** com as mesmas opções
+da carta grande: marcar como "tenho", quantidade, ★ Lista de Desejos e comprar na Liga / MYP; as outras sugestões ficam em "Não é essa?".
+
+**Pela imagem (principal, rápido):** `js/24-imagem-logica.js` acha o contorno da carta no quadro (retângulo no formato da carta com as
+bordas mais fortes) e compara a imagem com a **assinatura** de todas as cartas: a cor média de uma grade de 10 × 14 quadradinhos, sem a
+média de cada cor (luz forte ou fraca dá no mesmo). As assinaturas são geradas na publicação (`scripts/gerar_assinaturas.mjs`, a partir de
+`img/`, em `pages.yml`) e baixadas pelo app só na primeira vez (`data/assinaturas.json` + `data/assinaturas-{hash}.bin`, ~3,6 MB, guardadas
+pelo `sw.js`). Um quadro leva ~0,1 s no computador. Aceita quando a nota passa de 0,6 e fica 0,04 à frente da próxima arte diferente
+(`escolherPelaImagem`); perto do limite, precisa aparecer em dois quadros seguidos. Cartas com a **mesma arte** (reimpressões, energias)
+empatam: aí o leitor de texto lê o número só na região da carta e desempata. Testado com 150 fotos simuladas (carta pequena, torta,
+desfocada, com reflexo e cor alterada): 95% de acerto no 1º lugar, e a regra aceitou 93% delas sem nenhum erro; e com uma foto real da
+câmera de um celular (Gardevoir ex, número ilegível): reconhecida.
+
+**Pelo texto (reserva):** quando a imagem não basta (ou o banco não carregou), o leitor de texto lê o rodapé e o nome.
 O texto é lido com [Tesseract.js](https://github.com/naptha/tesseract.js) (baixado da jsDelivr só na
 primeira vez, depois fica no cache; precisa de internet nessa primeira vez). `reconhecerCartas` (`js/23-reconhecer-logica.js`)
 procura o número impresso (`057/198`, corrigindo O→0 e I→1) e o nome, e cruza com `data/cartas.json`: número + total do set

@@ -107,11 +107,35 @@ async function reconhecerFoto(arquivo, aoProgresso) {
 	return { achadas, texto }
 }
 
+/* ----- Reconhecer pela imagem (banco de assinaturas) ----- */
+// O banco (data/assinaturas.json + .bin, gerados na publicação) é baixado só na primeira vez que a aba abre
+// e fica guardado no aparelho (sw.js). Sem ele, a câmera usa só o leitor de texto.
+let bancoDeImagens = null
+let carregandoBanco = null
+
+function carregarBancoDeImagens() {
+	carregandoBanco ||= (async () => {
+		const resposta = await fetch('data/assinaturas.json', { cache: 'no-cache' })
+		if (!resposta.ok) throw new Error(`assinaturas.json: HTTP ${resposta.status}`)
+		const info = await resposta.json()
+		const lista = cartasEmOrdem()
+		if (info.marca !== marcaDasCartas(lista)) throw new Error('assinaturas de outra lista de cartas')
+		const arquivo = await fetch(`data/${info.arquivo}`)
+		if (!arquivo.ok) throw new Error(`${info.arquivo}: HTTP ${arquivo.status}`)
+		bancoDeImagens = montarBancoDeAssinaturas(new Int8Array(await arquivo.arrayBuffer()), info.escala, lista)
+		registrar('info', `Escanear: reconhecimento pela imagem pronto (${info.comImagem} cartas)`)
+		return bancoDeImagens
+	})().catch(erro => { carregandoBanco = null; throw erro })
+	return carregandoBanco
+}
+
 /* ----- Câmera ao vivo dentro da aba ----- */
+const CHAVE_CAMERA = 'colecao-tcg-camera'   // câmera escolhida pelo usuário (botão 🔄)
 let fluxoDaCamera = null
 let geracaoDaCamera = 0         // cada abertura ganha um número; uma abertura antiga que termina depois é descartada
-let leiturasSemNumero = 0
-let candidataAnterior = ''      // carta lida no quadro anterior (precisa repetir para valer, se o nome não foi lido)
+let camerasTraseiras = []
+let leiturasSemCarta = 0
+let gemeasAnteriores = []       // cartas (chaves) vistas no quadro anterior
 let ultimaReconhecida = ''      // última carta que a câmera reconheceu (só troca a carta mostrada quando muda)
 
 const chaveDaCarta = ({ set, carta }) => `${set.id}|${carta.n}`
@@ -138,6 +162,22 @@ document.addEventListener('visibilitychange', () => {
 	else if (rotaAtual().aba === 'escanear' && $('#camera-video')) ligarCamera()
 })
 
+const VIDEO_BOM = { width: { ideal: 1920 }, height: { ideal: 1080 } }
+
+// Câmeras de trás do aparelho. Os nomes só aparecem depois que a câmera foi liberada.
+async function listarCamerasTraseiras() {
+	const todas = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput')
+	const traseiras = todas.filter(d => /back|rear|traseira|environment/i.test(d.label))
+	return traseiras.length ? traseiras : todas
+}
+
+// A câmera principal costuma ser a de trás com o menor número no nome ("camera2 0, facing back");
+// a grande-angular e a de zoom vêm depois e focam pior de perto.
+function cameraPrincipal(cameras) {
+	const numero = d => Number(/(\d+)/.exec(d.label)?.[1] ?? 99)
+	return [...cameras].sort((a, b) => numero(a) - numero(b))[0]
+}
+
 async function ligarCamera() {
 	fecharCamera()
 	const geracao = geracaoDaCamera
@@ -148,10 +188,26 @@ async function ligarCamera() {
 		return
 	}
 	mensagemDaCamera('Abrindo a câmera…')
+	carregarBancoDeImagens().catch(erro => registrar('aviso', 'Escanear: sem reconhecimento pela imagem', textoDe(erro)))
 	let fluxo
 	try {
-		fluxo = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false })
+		const salva = ler(CHAVE_CAMERA)
+		try {
+			fluxo = await navigator.mediaDevices.getUserMedia({ video: salva ? { deviceId: { exact: salva }, ...VIDEO_BOM } : { facingMode: { ideal: 'environment' }, ...VIDEO_BOM }, audio: false })
+		} catch (erro) {
+			if (!salva || erro?.name === 'NotAllowedError') throw erro
+			fluxo = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, ...VIDEO_BOM }, audio: false })
+		}
+		// Primeira vez: troca para a câmera principal (o aparelho às vezes entrega a grande-angular).
+		camerasTraseiras = await listarCamerasTraseiras()
+		const atual = fluxo.getVideoTracks()[0].getSettings().deviceId
+		const principal = cameraPrincipal(camerasTraseiras)
+		if (!salva && principal && principal.deviceId && principal.deviceId !== atual) {
+			fluxo.getTracks().forEach(faixa => faixa.stop())
+			fluxo = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: principal.deviceId }, ...VIDEO_BOM }, audio: false })
+		}
 	} catch (erro) {
+		fluxo?.getTracks().forEach(faixa => faixa.stop())
 		if (geracao !== geracaoDaCamera) return
 		registrar('aviso', 'Câmera ao vivo indisponível', textoDe(erro))
 		caixa.classList.add('sem-camera')
@@ -165,15 +221,29 @@ async function ligarCamera() {
 	fluxoDaCamera = fluxo
 	caixa.classList.remove('sem-camera')
 	$('#camera-tentar').hidden = true
+	$('#camera-trocar').hidden = camerasTraseiras.length < 2
 	const faixa = fluxo.getVideoTracks()[0]
-	// Foco contínuo (quando o aparelho deixa) ajuda a ler o número pequeno da carta.
+	// Foco contínuo (quando o aparelho deixa) ajuda a ver a carta de perto.
 	try { await faixa.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }) } catch { /* sem controle de foco */ }
 	if (faixa.getCapabilities?.().torch) $('#camera-lanterna').hidden = false
+	const { width, height } = faixa.getSettings()
+	registrar('info', `Câmera: ${faixa.label || 'sem nome'} (${width}×${height})`, camerasTraseiras.map(d => d.label).join(' | '))
 	const video = $('#camera-video')
 	video.srcObject = fluxo
 	video.play().catch(() => {})
-	mensagemDaCamera('Encaixe a carta na moldura')
+	mensagemDaCamera('Coloque a carta na moldura')
 	varrerCamera(geracao)
+}
+
+// Botão 🔄: passa para a próxima câmera de trás (fica guardada para as próximas vezes).
+async function trocarCamera() {
+	if (camerasTraseiras.length < 2) return
+	const atual = fluxoDaCamera?.getVideoTracks()[0]?.getSettings().deviceId
+	const i = camerasTraseiras.findIndex(d => d.deviceId === atual)
+	const proxima = camerasTraseiras[(i + 1) % camerasTraseiras.length]
+	gravar(CHAVE_CAMERA, proxima.deviceId)
+	avisar(`Câmera ${(i + 1) % camerasTraseiras.length + 1} de ${camerasTraseiras.length}`)
+	await ligarCamera()
 }
 
 async function alternarLanterna() {
@@ -201,10 +271,11 @@ function regiaoDaMoldura(video, moldura, folga = 0.06) {
 	return { x: x0, y: y0, largura: x1 - x0, altura: y1 - y0 }
 }
 
-function quadroDaCamera() {
+// Recorte do vídeo (a moldura com folga) em tamanho real, para o leitor de texto.
+function quadroDaCamera(folga) {
 	const video = $('#camera-video')
 	if (!video?.videoWidth || video.paused) return null
-	const { x, y, largura, altura } = regiaoDaMoldura(video, $('#camera-moldura'))
+	const { x, y, largura, altura } = regiaoDaMoldura(video, $('#camera-moldura'), folga)
 	if (largura < 50 || altura < 50) return null
 	const quadro = document.createElement('canvas')
 	quadro.width = Math.round(largura)
@@ -213,7 +284,27 @@ function quadroDaCamera() {
 	return quadro
 }
 
-// Lê um quadro da câmera: o número primeiro (rápido); se achar, lê também o nome para confirmar ou desempatar.
+// Mesmo recorte reduzido para 200 px de altura (o reconhecimento pela imagem não precisa de mais).
+function pixelsReduzidos(quadro, altura = 200) {
+	const largura = Math.max(1, Math.round(quadro.width * altura / quadro.height))
+	const canvas = document.createElement('canvas')
+	canvas.width = largura
+	canvas.height = altura
+	const g = canvas.getContext('2d', { willReadFrequently: true })
+	g.imageSmoothingQuality = 'high'
+	g.drawImage(quadro, 0, 0, largura, altura)
+	return { pixels: g.getImageData(0, 0, largura, altura).data, largura, altura }
+}
+
+function recortarRegiao(canvas, { x0, y0, x1, y1 }) {
+	const saida = document.createElement('canvas')
+	saida.width = Math.max(1, Math.round((x1 - x0) * canvas.width))
+	saida.height = Math.max(1, Math.round((y1 - y0) * canvas.height))
+	saida.getContext('2d').drawImage(canvas, x0 * canvas.width, y0 * canvas.height, saida.width, saida.height, 0, 0, saida.width, saida.height)
+	return saida
+}
+
+// Lê um quadro da câmera só com o leitor de texto: o número primeiro; se achar, o nome para confirmar.
 async function lerQuadro(trabalhador, quadro) {
 	let texto = await lerRegiao(trabalhador, quadro, LER_NUMERO)
 	let achadas = reconhecerCartas(texto)
@@ -226,46 +317,73 @@ async function lerQuadro(trabalhador, quadro) {
 	return { achadas: reconhecerCartas(texto), texto }
 }
 
-// Laço da câmera: enquanto esta abertura da câmera durar (mesma `geracao`), lê um quadro, espera um pouco e repete.
+// Laço da câmera: enquanto esta abertura da câmera durar (mesma `geracao`), olha um quadro e repete.
+// Pela imagem leva uma fração de segundo; o leitor de texto (mais lento) só entra para desempatar
+// cartas com a mesma arte ou quando a imagem não basta.
 async function varrerCamera(geracao) {
 	const ativa = () => geracao === geracaoDaCamera
-	try {
-		if (!leitor) mensagemDaCamera('Preparando o leitor… (só na primeira vez; precisa de internet)')
-		const trabalhador = await prepararLeitor()
-		if (ativa()) mensagemDaCamera('Encaixe a carta na moldura')
-		while (ativa()) {
-			const quadro = lendoFoto ? null : quadroDaCamera()
-			if (quadro) await cicloDaCamera(trabalhador, quadro, ativa)
-			await esperar(300)
+	prepararLeitor().catch(erro => registrar('aviso', 'Escanear: leitor de texto indisponível', textoDe(erro)))
+	while (ativa()) {
+		if (!bancoDeImagens && !leitor) mensagemDaCamera('Preparando o reconhecimento… (só na primeira vez; precisa de internet)')
+		try {
+			if (!lendoFoto) await cicloDaCamera(ativa)
+		} catch (erro) {
+			if (!ativa()) return   // saiu da aba no meio da leitura (o leitor foi encerrado)
+			registrar('aviso', 'Escanear: falha ao ler um quadro', textoDe(erro))
 		}
-	} catch (erro) {
-		if (!ativa()) return   // saiu da aba no meio da leitura (o leitor foi encerrado)
-		registrar('erro', 'Falha na leitura da câmera', textoDe(erro))
-		mensagemDaCamera('Não foi possível carregar o leitor de texto. Confira a internet (ele é baixado na primeira vez) e toque em "Tentar de novo".')
-		$('#camera-tentar').hidden = false
+		await esperar(bancoDeImagens ? 80 : 300)
 	}
 }
 
-async function cicloDaCamera(trabalhador, quadro, ativa) {
-	const { achadas, texto } = await lerQuadro(trabalhador, quadro)
+async function cicloDaCamera(ativa) {
+	const quadro = quadroDaCamera(0.12)
+	if (!quadro) return
+	let achadas = []
+	let texto = ''
+	let pelaImagem = false
+	if (bancoDeImagens) {
+		const { pixels, largura, altura } = pixelsReduzidos(quadro)
+		const resultado = reconhecerPorImagem(pixels, largura, altura, bancoDeImagens)
+		const escolha = escolherPelaImagem(resultado, bancoDeImagens)
+		if (escolha) {
+			pelaImagem = true
+			const chaves = escolha.gemeas.map(chaveDaCarta)
+			// Mesma arte em mais de uma carta: o número impresso (lido na região onde a carta foi achada) desempata.
+			let principal = escolha.carta
+			if (escolha.gemeas.length > 1 && leitor) {
+				texto = await lerRegiao(leitor, recortarRegiao(quadro, escolha.carta.regiao), LER_RODAPE)
+				if (!ativa()) return
+				const pelasLetras = reconhecerCartas(texto).filter(r => r.pontos >= 10).map(chaveDaCarta)
+				principal = escolha.gemeas.find(g => pelasLetras.includes(chaveDaCarta(g))) || principal
+			}
+			// Nota alta vale na hora; perto do limite, a carta precisa aparecer em dois quadros seguidos.
+			const confirmada = principal.pontos >= 0.7 || gemeasAnteriores.includes(chaveDaCarta(principal))
+			gemeasAnteriores = chaves
+			if (!confirmada) return
+			achadas = [principal, ...resultado.filter(r => r !== principal)]
+		} else {
+			gemeasAnteriores = []
+		}
+	}
+	// Sem resposta pela imagem: tenta pelo texto, que é lento (1 a 2 s). Com o banco de imagens, só de vez em
+	// quando, para não travar o reconhecimento pela imagem enquanto a carta é ajeitada na moldura.
+	if (!pelaImagem && leitor && (!bancoDeImagens || leiturasSemCarta % 8 === 7)) {
+		const lido = await lerQuadro(leitor, quadroDaCamera(0.06) || quadro)
+		texto = lido.texto
+		if (lido.achadas.length && lido.achadas[0].pontos >= 16) achadas = lido.achadas
+	}
 	if (!ativa()) return
 	if (!achadas.length) {
-		candidataAnterior = ''
-		leiturasSemNumero++
-		if (leiturasSemNumero >= 6) mensagemDaCamera('Aproxime a carta, deixe o número de baixo bem visível e evite reflexo')
+		leiturasSemCarta++
+		if (leiturasSemCarta >= (bancoDeImagens ? 15 : 6)) mensagemDaCamera('Encaixe a carta inteira na moldura, de frente e sem reflexo')
 		return
 	}
-	leiturasSemNumero = 0
-	const chave = chaveDaCarta(achadas[0])
-	// Número + total + nome batendo vale na hora; só o número precisa aparecer igual em dois quadros seguidos
-	// (um dígito mal lido num quadro só não troca a carta mostrada).
-	const confirmada = achadas[0].pontos >= 16 || chave === candidataAnterior
-	candidataAnterior = chave
-	if (!confirmada) { mensagemDaCamera('Lendo…'); return }
+	leiturasSemCarta = 0
 	mensagemDaCamera('Carta reconhecida ✓')
+	const chave = chaveDaCarta(achadas[0])
 	if (chave === ultimaReconhecida) return
 	ultimaReconhecida = chave
-	registrar('info', `Escanear (câmera): ${achadas[0].carta.nome}`, texto.replace(/\s+/g, ' ').slice(0, 300))
+	registrar('info', `Escanear (${pelaImagem ? `imagem ${achadas[0].pontos.toFixed(2)}` : 'texto'}): ${achadas[0].carta.nome}`, texto.replace(/\s+/g, ' ').slice(0, 300))
 	navigator.vibrate?.(40)
 	mostrarResultado(achadas)
 }
@@ -277,15 +395,16 @@ function telaEscanear() {
 	definirTopo('Escanear cartas', '', false)
 	fecharCamera()
 	ultimaReconhecida = ''
-	candidataAnterior = ''
-	leiturasSemNumero = 0
+	gemeasAnteriores = []
+	leiturasSemCarta = 0
 	tela.innerHTML = `
 		<div class="escanear">
 			<div class="camera" id="camera">
 				<video id="camera-video" playsinline muted autoplay></video>
 				<div class="camera-moldura" id="camera-moldura"></div>
 				<p class="camera-aviso" id="camera-aviso" role="status"></p>
-				<button class="camera-lanterna" id="camera-lanterna" aria-pressed="false" aria-label="Lanterna" hidden>💡</button>
+				<button class="camera-botao camera-trocar" id="camera-trocar" aria-label="Trocar de câmera" hidden>🔄</button>
+				<button class="camera-botao camera-lanterna" id="camera-lanterna" aria-pressed="false" aria-label="Lanterna" hidden>💡</button>
 				<button class="botao camera-tentar" id="camera-tentar" hidden>Tentar de novo</button>
 			</div>
 			<p class="dica escanear-dica">Coloque <b>uma carta por vez</b> na moldura, de frente e sem reflexo. A carta aparece aqui embaixo quando for reconhecida.</p>
@@ -303,6 +422,7 @@ function telaEscanear() {
 		</div>`
 	$('#camera-tentar').addEventListener('click', ligarCamera)
 	$('#camera-lanterna').addEventListener('click', alternarLanterna)
+	$('#camera-trocar').addEventListener('click', trocarCamera)
 	for (const entrada of [$('#foto-camera'), $('#foto-galeria')]) {
 		entrada.addEventListener('change', async evento => {
 			const arquivo = evento.target.files[0]

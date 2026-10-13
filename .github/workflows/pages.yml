@@ -44,6 +44,12 @@ jobs:
           path: img
           key: imagens-${{ github.run_id }}
 
+      # Assinatura de cada imagem, para o Escanear reconhecer a carta pela imagem (js/24-imagem-logica.js).
+      - name: Gerar as assinaturas das imagens
+        run: |
+          npm install --no-save --no-package-lock sharp@0.33.5
+          node scripts/gerar_assinaturas.mjs
+
       - name: Montar o site
         run: |
           mkdir _site

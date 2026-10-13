@@ -2,7 +2,7 @@
 //
 // Ao mudar algum arquivo do app, aumente o número da VERSAO para os celulares
 // baixarem a versão nova.
-const VERSAO = 'v48'
+const VERSAO = 'v49'
 const CACHE_APP = `colecao-app-${VERSAO}`
 const CACHE_IMAGENS = 'colecao-imagens'
 
@@ -16,6 +16,7 @@ const ARQUIVOS_APP = [
 	'js/21-trocas-logica.js',
 	'js/22-importar-deck-logica.js',
 	'js/23-reconhecer-logica.js',
+	'js/24-imagem-logica.js',
 	'js/30-cartas-grade.js',
 	'js/35-efeitos.js',
 	'js/40-liga-e-carta-grande.js',
@@ -86,6 +87,11 @@ self.addEventListener('fetch', evento => {
 		(url.hostname === 'cdn.jsdelivr.net' && url.pathname.startsWith('/npm/tesseract')) || url.hostname === 'tessdata.projectnaptha.com') {
 		// Bibliotecas de versão fixa (login e leitor de texto do Escanear): guarda e reutiliza.
 		evento.respondWith(bibliotecaFirebase(request))
+	} else if (url.origin === self.location.origin && /\/data\/assinaturas-[^/]*\.bin$/.test(url.pathname)) {
+		// Assinaturas das imagens (Escanear): o nome muda quando o conteúdo muda, então guarda e reutiliza.
+		evento.respondWith(bibliotecaFirebase(request))
+	} else if (url.origin === self.location.origin && url.pathname.endsWith('/data/assinaturas.json')) {
+		evento.respondWith(daRedeOuGuardado(request))
 	} else if (url.origin === self.location.origin) {
 		evento.respondWith(arquivoDoApp(request))
 	}
@@ -137,4 +143,16 @@ async function bibliotecaFirebase(request) {
 	const resposta = await fetch(request)
 	if (resposta.ok) cache.put(request.url, resposta.clone())
 	return resposta
+}
+
+// Pequenos arquivos que mudam a cada publicação (índice das assinaturas): da internet quando dá; sem internet, a última cópia.
+async function daRedeOuGuardado(request) {
+	const cache = await caches.open(CACHE_IMAGENS)
+	try {
+		const resposta = await fetch(request.url, { cache: 'no-cache' })
+		if (resposta.ok) cache.put(request.url, resposta.clone())
+		return resposta
+	} catch {
+		return (await cache.match(request.url)) || Response.error()
+	}
 }
