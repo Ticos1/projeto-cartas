@@ -11,8 +11,8 @@ function criarCarta(set, carta, mostrarSet) {
 	botao.setAttribute('aria-pressed', tenho(set.id, carta.n))
 	botao.innerHTML = `
 		<div class="carta-img">
-			<span class="sem-imagem">${escapar(carta.nome)}</span>
-			<img alt="${escapar(carta.nome)}" loading="lazy" decoding="async">
+			<span class="sem-imagem" aria-hidden="true">${escapar(carta.nome)}</span>
+			<img alt="" loading="lazy" decoding="async">
 			<span class="selo">${ICONE_CHECK}</span>
 			<span class="selo-qtd" aria-hidden="true"></span>
 			<span class="selo-desejo" aria-hidden="true">★</span>
@@ -46,10 +46,24 @@ function anunciarCarta(setId, n) {
 	anunciar(qtd === 0 ? `${nome}: desmarcada` : qtd === 1 ? `${nome}: marcada como "tenho"` : `${nome}: ${qtd} cópias`)
 }
 
+// Cada carta da grade vem com um botão "Detalhes" logo depois dela: abre a carta grande pelo
+// teclado e pelo leitor de tela, que não fazem o "segurar". Só aparece quando recebe o foco do teclado.
+function criarCelula(set, carta, mostrarSet) {
+	const celula = document.createElement('div')
+	celula.className = 'celula-carta'
+	const detalhes = document.createElement('button')
+	detalhes.type = 'button'
+	detalhes.className = 'carta-detalhes'
+	detalhes.textContent = 'Detalhes'
+	detalhes.setAttribute('aria-label', `Ver detalhes de ${carta.nome}`)
+	celula.append(criarCarta(set, carta, mostrarSet), detalhes)
+	return celula
+}
+
 function montarGrade(itens, mostrarSet) {
 	const grade = document.createElement('div')
 	grade.className = 'grade'
-	for (const { set, carta } of itens) grade.appendChild(criarCarta(set, carta, mostrarSet))
+	for (const { set, carta } of itens) grade.appendChild(criarCelula(set, carta, mostrarSet))
 	return grade
 }
 
@@ -144,6 +158,8 @@ tela.addEventListener('contextmenu', evento => {
 })
 
 tela.addEventListener('click', evento => {
+	const detalhes = evento.target.closest('.carta-detalhes')
+	if (detalhes) { abrirZoom(detalhes.parentElement.querySelector('.carta')); return }
 	const botao = evento.target.closest('.carta')
 	if (!botao) return
 	if (foiToqueLongo) { foiToqueLongo = false; return }
@@ -196,6 +212,7 @@ function abrirZoom(botao) {
 	atualizarBotaoZoom()
 	$('#zoom').hidden = false
 	registrarSobreposicao()
+	focar($('#zoom .zoom-caixa'))
 
 	pararEfeitos()
 	if (semAnimacao()) { iniciarEfeitos(carta.raridade, true); mostrarEstrela(); return }
@@ -243,6 +260,7 @@ async function fecharZoom(animar = true, forcar = false, veioDoHistorico = false
 	$('#zoom').hidden = true
 	for (const el of [$('#zoom'), $('#zoom-giro'), $('#zoom-detalhes')]) el.getAnimations().forEach(a => a.cancel())
 	if (!veioDoHistorico) liberarSobreposicao()
+	devolverFoco()
 	if (rotaAtual().aba === 'desejos' && !rotaAtual().sub) { const y = window.scrollY; desenharDesejos(); window.scrollTo(0, y) }
 }
 

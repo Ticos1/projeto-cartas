@@ -14,7 +14,8 @@ const PASSOS_TUTORIAL = [
 	{ icone: '👆', titulo: 'Segure para ver a carta grande', texto: [
 		'<b>Segure</b> uma carta por meio segundo: ela gira, mostra o verso e para de frente, com efeitos conforme a raridade.',
 		'Na carta grande dá para marcar ou desmarcar, e abrir a carta na <b>Liga Pokémon</b> para comprar.',
-		'Toque fora da carta (ou use o voltar) para fechar.'] },
+		'Toque fora da carta (ou use o voltar) para fechar.',
+		'No teclado ou com leitor de tela: cada carta tem um botão <b>Detalhes</b> logo depois dela (aperte Tab) que abre a carta grande; <b>Esc</b> fecha.'] },
 	{ icone: '📚', titulo: 'Coleções', texto: [
 		'Mostra cada coleção com o seu progresso (quantas você tem e a porcentagem), agrupadas por série.',
 		'Em <b>Escolher coleções</b> você liga só as que coleciona; as outras somem do app.',

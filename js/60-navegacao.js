@@ -21,6 +21,7 @@ function navegar() {
 	aberturaDoZoom++
 	pararEfeitos()
 	entradasDeSobreposicao = 0
+	focoAntesDasSobreposicoes = []
 	// Toda tela que o app abre fica marcada como "do app" no histórico.
 	if (!history.state?.app) history.replaceState({ app: true }, '')
 	$('#gaveta').hidden = true
@@ -51,9 +52,52 @@ let entradasDeSobreposicao = 0   // quantas entradas extras o app empurrou no hi
 let ignorarPopstate = 0          // voltas que o próprio app pediu (não são o botão do celular)
 
 function registrarSobreposicao() {
+	focoAntesDasSobreposicoes.push(document.activeElement)
 	history.pushState({ app: true, sobreposicao: true }, '')
 	entradasDeSobreposicao++
 }
+
+/* ---------- Teclado e leitor de tela nas sobreposições ---------- */
+// Ao abrir, o foco vai para dentro da sobreposição; ao fechar, volta para onde estava
+// (a carta, o botão do filtro…). Esc fecha, e o Tab não sai dela enquanto está aberta.
+let focoAntesDasSobreposicoes = []
+
+function focar(elemento) {
+	elemento?.focus({ preventScroll: true })
+}
+
+function devolverFoco() {
+	const anterior = focoAntesDasSobreposicoes.pop()
+	if (anterior && anterior !== document.body && document.body.contains(anterior)) focar(anterior)
+}
+
+const sobreposicaoAberta = () => ['#dialogo', '#zoom', '#menu', '#gaveta', '#escolha'].map(seletor => $(seletor)).find(el => !el.hidden)
+
+function focaveis(caixa) {
+	return [...caixa.querySelectorAll('button, a[href], input, select, textarea, [tabindex]')]
+		.filter(el => !el.disabled && el.tabIndex >= 0 && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden')
+}
+
+function fecharSobreposicao(aberta) {
+	if (aberta.id === 'zoom') fecharZoom(true, true)
+	else if (aberta.id === 'menu') fecharMenu()
+	else if (aberta.id === 'gaveta') fecharGaveta()
+	else if (aberta.id === 'escolha') fecharEscolha()
+}
+
+document.addEventListener('keydown', evento => {
+	const aberta = sobreposicaoAberta()
+	if (!aberta || evento.defaultPrevented) return
+	if (evento.key === 'Escape') { evento.preventDefault(); fecharSobreposicao(aberta); return }
+	if (evento.key !== 'Tab') return
+	const lista = focaveis(aberta)
+	if (!lista.length) return
+	const primeiro = lista[0]
+	const ultimo = lista[lista.length - 1]
+	if (!aberta.contains(document.activeElement)) { evento.preventDefault(); focar(evento.shiftKey ? ultimo : primeiro) }
+	else if (evento.shiftKey && document.activeElement === primeiro) { evento.preventDefault(); focar(ultimo) }
+	else if (!evento.shiftKey && document.activeElement === ultimo) { evento.preventDefault(); focar(primeiro) }
+})
 
 // A sobreposição foi fechada pela própria tela (toque fora, botão Fechar): tira a entrada.
 function liberarSobreposicao() {
@@ -115,6 +159,7 @@ function abrirGaveta() {
 	marcarAbaNaGaveta(rotaAtual().aba)
 	$('#gaveta').hidden = false
 	registrarSobreposicao()
+	focar($('.gaveta-item[aria-current="page"]') || $('.gaveta-item'))
 	if (semAnimacao()) return
 	$('.gaveta').animate([{ transform: 'translateX(-100%)' }, { transform: 'none' }], { duration: 220, easing: 'ease-out' })
 	$('#gaveta').animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220 })
@@ -124,6 +169,7 @@ function fecharGaveta(veioDoHistorico = false) {
 	if ($('#gaveta').hidden) return
 	$('#gaveta').hidden = true
 	if (!veioDoHistorico) liberarSobreposicao()
+	devolverFoco()
 }
 
 // Vai para outra tela a partir da gaveta ou do menu: a entrada de histórico da sobreposição
