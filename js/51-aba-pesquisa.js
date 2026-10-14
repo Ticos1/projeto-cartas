@@ -156,6 +156,7 @@ function abrirEscolha(titulo, opcoes, atual, escolheu) {
 	aoEscolher = escolheu
 	$('#escolha').hidden = false
 	registrarSobreposicao()
+	focar($('#opcoes-escolha [aria-checked="true"]') || $('#opcoes-escolha .opcao-set'))
 	if (!semAnimacao()) $('#escolha .folha').animate([{ transform: 'translateY(40px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 200, easing: 'ease-out' })
 }
 
@@ -163,6 +164,7 @@ function fecharEscolha(veioDoHistorico = false) {
 	if ($('#escolha').hidden) return
 	$('#escolha').hidden = true
 	if (!veioDoHistorico) liberarSobreposicao()
+	devolverFoco()
 }
 
 $('#escolha').addEventListener('click', evento => {

@@ -87,7 +87,7 @@
 
 	<!-- Lista de escolha com ícones (filtros da Pesquisa: coleção e raridade) -->
 	<div class="fundo-escuro" id="escolha" hidden>
-		<div class="folha" role="dialog" aria-labelledby="escolha-titulo">
+		<div class="folha" role="dialog" aria-modal="true" aria-labelledby="escolha-titulo">
 			<h2 id="escolha-titulo"></h2>
 			<ul class="lista-opcoes" id="opcoes-escolha"></ul>
 		</div>
@@ -108,7 +108,7 @@
 
 	<!-- Menu (backup e tema) -->
 	<div class="fundo-escuro" id="menu" hidden>
-		<div class="folha" role="dialog" aria-label="Menu">
+		<div class="folha" role="dialog" aria-modal="true" aria-label="Menu" tabindex="-1">
 			<section id="conta">
 				<h2>Conta</h2>
 				<p class="dica" id="conta-carregando">Carregando…</p>
@@ -170,7 +170,7 @@
 		<button class="zoom-estrela" id="zoom-estrela" aria-pressed="false" aria-label="Adicionar à lista de desejos">
 			<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.8l6-.8z"/></svg>
 		</button>
-		<div class="zoom-caixa" role="dialog" aria-label="Carta ampliada">
+		<div class="zoom-caixa" role="dialog" aria-modal="true" aria-labelledby="zoom-nome" aria-describedby="zoom-info" tabindex="-1">
 			<div class="carta-3d">
 				<div class="ef-halo" aria-hidden="true"></div>
 				<div class="carta-giro" id="zoom-giro">

@@ -138,6 +138,7 @@ function fecharDialogo(resposta, veioDoHistorico = false) {
 	if (!pendente) return
 	respostaDoDialogo = null
 	$('#dialogo').hidden = true
+	devolverFoco()
 	if (pendente.soAviso) resposta = true
 	if (veioDoHistorico) { pendente.resolver(resposta); return }
 	liberarSobreposicao()

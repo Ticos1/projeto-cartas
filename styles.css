@@ -240,6 +240,33 @@ main {
 .pct.completa { color: var(--ok); }
 
 /* ---------- Grade de cartas ---------- */
+/* Foco do teclado bem visível; caixas que recebem o foco ao abrir não ganham contorno */
+:focus-visible { outline: 3px solid var(--destaque-letra); outline-offset: 2px; }
+.folha:focus, .zoom-caixa:focus { outline: none; }
+
+.celula-carta { position: relative; min-width: 0; }
+.celula-carta > .carta { display: block; width: 100%; }
+/* "Detalhes": escondido para quem usa o dedo; aparece quando o teclado chega na carta */
+.carta-detalhes {
+	position: absolute;
+	top: 5px;
+	left: 5px;
+	z-index: 2;
+	padding: 4px 10px;
+	border: 0;
+	border-radius: 999px;
+	background: var(--destaque);
+	color: var(--destaque-texto);
+	font: inherit;
+	font-size: .75rem;
+	font-weight: 700;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+	opacity: 0;
+	pointer-events: none;
+}
+.carta-detalhes:focus-visible,
+.celula-carta:has(.carta:focus-visible) .carta-detalhes { opacity: 1; pointer-events: auto; }
+
 .grade {
 	display: grid;
 	grid-template-columns: repeat(3, minmax(0, 1fr));

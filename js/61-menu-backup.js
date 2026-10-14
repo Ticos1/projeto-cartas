@@ -6,11 +6,13 @@ function abrirMenu() {
 	configurarSecaoApk()
 	$('#menu').hidden = false
 	registrarSobreposicao()
+	focar($('#menu .folha'))
 }
 function fecharMenu(veioDoHistorico = false) {
 	if ($('#menu').hidden) return
 	$('#menu').hidden = true
 	if (!veioDoHistorico) liberarSobreposicao()
+	devolverFoco()
 }
 $('#abrir-menu').addEventListener('click', abrirMenu)
 $('#status-nuvem').addEventListener('click', abrirMenu)
