@@ -2,6 +2,7 @@
 
 /* ---------- Navegação (endereços com #) ---------- */
 // Abas: #/como-usar (tutorial, abre por padrão ao entrar no app), #/pesquisa, #/colecoes, #/desejos e #/configuracoes. Um set (#/set/ID) fica dentro de Coleções.
+// #/receber não é uma aba: é onde o app abre quando algo é compartilhado com ele (veja receberCompartilhado).
 function rotaAtual() {
 	const partes = location.hash.replace(/^#\/?/, '').split('/')
 	if (partes[0] === 'set') return { aba: 'colecoes', setId: decodeURIComponent(partes[1] || '') }
@@ -13,6 +14,7 @@ function rotaAtual() {
 	if (partes[0] === 'deck') return { aba: 'decks', deckId: decodeURIComponent(partes[1] || '') }
 	if (partes[0] === 'configuracoes') return { aba: 'configuracoes', sub: partes[1] === 'logs' ? 'logs' : 'temas' }
 	if (partes[0] === 'pesquisa') return { aba: 'pesquisa' }
+	if (partes[0] === 'receber') return { aba: 'receber' }
 	return { aba: 'ajuda' }
 }
 
@@ -27,6 +29,7 @@ function navegar() {
 	$('#gaveta').hidden = true
 	$('#escolha').hidden = true
 	const { setId, aba, sub } = rotaAtual()
+	if (aba === 'receber') { receberCompartilhado(); return }
 	if (setId) telaSet(setId)
 	else if (aba === 'colecoes') telaColecoes()
 	else if (aba === 'ajuda') telaComoUsar()

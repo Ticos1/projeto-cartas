@@ -71,3 +71,25 @@ function importarListaDeDeck(texto) {
 	}
 	return { cartas, total, naoAchadas }
 }
+
+/* ---------- Arquivo ou texto compartilhado com o app (WhatsApp etc.) ---------- */
+// O Android entrega um título, um texto e/ou arquivos ({ nome, conteudo }). Devolve o que fazer:
+// { tipo: 'backup', texto } (um backup do app), { tipo: 'deck', texto, nome } (uma lista de deck)
+// ou { tipo: 'nada' }.
+function entenderCompartilhado({ titulo = '', texto = '', arquivos = [] } = {}) {
+	for (const arquivo of arquivos) {
+		const conteudo = String(arquivo.conteudo || '')
+		if (!/^\s*\{/.test(conteudo)) continue
+		try {
+			const objeto = JSON.parse(conteudo)
+			if (objeto && typeof objeto === 'object' && objeto.cartas && typeof objeto.cartas === 'object') return { tipo: 'backup', texto: conteudo }
+		} catch { /* não é JSON: talvez seja uma lista */ }
+	}
+	const temCarta = t => String(t).split(/\r?\n/).some(linha => lerLinhaDeDeck(linha))
+	const semExtensao = nome => String(nome || '').replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim()
+	for (const arquivo of arquivos) {
+		if (temCarta(arquivo.conteudo || '')) return { tipo: 'deck', texto: String(arquivo.conteudo), nome: (semExtensao(arquivo.nome) || String(titulo).trim()).slice(0, 60) }
+	}
+	if (temCarta(texto)) return { tipo: 'deck', texto: String(texto), nome: String(titulo).trim().slice(0, 60) }
+	return { tipo: 'nada' }
+}

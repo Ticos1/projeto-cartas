@@ -76,10 +76,15 @@ $('#arquivo-backup').addEventListener('change', async evento => {
 		registrar('aviso', `Backup recusado: arquivo de ${Math.round(arquivo.size / 1024)} KB`)
 		return
 	}
+	await importarBackup(await arquivo.text())
+})
+
+// Confere o backup (texto do arquivo .json), pergunta e substitui a coleção.
+async function importarBackup(texto) {
 	let limpo
 	try {
 		// Só passam sets e cartas que existem na lista do app (limparBackup, em js/10-modelo.js).
-		limpo = limparBackup(JSON.parse(await arquivo.text()))
+		limpo = limparBackup(JSON.parse(texto))
 	} catch {
 		avisar('Esse arquivo não parece ser um backup válido.')
 		return
@@ -107,4 +112,42 @@ $('#arquivo-backup').addEventListener('change', async evento => {
 	fecharMenu()
 	navegar()
 	avisar(`Backup importado: ${quantidade} cartas.`)
-})
+}
+
+/* ---------- Receber algo compartilhado (WhatsApp, Arquivos…) ---------- */
+// O service worker guarda o que chegou pelo share_target do manifest e abre #/receber.
+// Um backup vai para a importação de backup; uma lista de deck, para a importação de deck.
+async function receberCompartilhado() {
+	history.replaceState({ app: true }, '', '#/decks')
+	let recebido = null
+	try {
+		const cache = await caches.open('colecao-compartilhado')
+		const resposta = await cache.match('recebido')
+		if (resposta) {
+			recebido = await resposta.json()
+			await cache.delete('recebido')
+		}
+	} catch (erro) {
+		registrar('aviso', 'Não deu para ler o que foi compartilhado', textoDe(erro))
+	}
+	const acao = entenderCompartilhado(recebido || {})
+	registrar('info', `Compartilhado com o app: ${acao.tipo}`)
+	if (acao.tipo === 'backup') {
+		history.replaceState({ app: true }, '', '#/colecoes')
+		navegar()
+		// Espera o login carregar (até 5 s), para o backup também substituir a coleção da conta.
+		for (let i = 0; i < 50 && !nuvem; i++) await new Promise(pronto => setTimeout(pronto, 100))
+		await importarBackup(acao.texto)
+		return
+	}
+	navegar()
+	if (acao.tipo === 'deck') {
+		$('#importar-deck').open = true
+		$('#importar-texto').value = acao.texto
+		if (acao.nome) $('#nome-deck').value = acao.nome
+		$('#importar-deck').scrollIntoView({ block: 'start' })
+		avisar('Lista de deck recebida. Confira e toque em "Importar como novo deck".')
+	} else {
+		avisar(recebido ? 'Não reconheci um backup nem uma lista de deck no que foi compartilhado.' : 'Nada foi recebido.')
+	}
+}
