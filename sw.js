@@ -2,7 +2,7 @@
 //
 // Ao mudar algum arquivo do app, aumente o número da VERSAO para os celulares
 // baixarem a versão nova.
-const VERSAO = 'v55'
+const VERSAO = 'v56'
 const CACHE_APP = `colecao-app-${VERSAO}`
 const CACHE_IMAGENS = 'colecao-imagens'
 
@@ -79,8 +79,12 @@ self.addEventListener('activate', evento => {
 
 self.addEventListener('fetch', evento => {
 	const { request } = evento
-	if (request.method !== 'GET') return
 	const url = new URL(request.url)
+	if (request.method === 'POST' && url.origin === self.location.origin && url.pathname.endsWith('/receber')) {
+		evento.respondWith(receberCompartilhado(request))
+		return
+	}
+	if (request.method !== 'GET') return
 
 	if (url.hostname === 'assets.tcgdex.net' || (url.origin === self.location.origin && url.pathname.includes('/img/'))) {
 		evento.respondWith(imagem(request))
@@ -97,6 +101,31 @@ self.addEventListener('fetch', evento => {
 		evento.respondWith(arquivoDoApp(request))
 	}
 })
+
+// Algo compartilhado com o app (share_target do manifest.webmanifest): guarda o texto e os
+// arquivos e abre o app em #/receber, que lê o que ficou guardado (js/61-menu-backup.js).
+const CACHE_COMPARTILHADO = 'colecao-compartilhado'
+const COMPARTILHADO_TAMANHO_MAXIMO = 5 * 1024 * 1024
+
+async function receberCompartilhado(request) {
+	try {
+		const formulario = await request.formData()
+		const arquivos = []
+		for (const arquivo of formulario.getAll('arquivos')) {
+			if (typeof arquivo === 'string' || arquivo.size > COMPARTILHADO_TAMANHO_MAXIMO) continue
+			arquivos.push({ nome: arquivo.name, conteudo: await arquivo.text() })
+		}
+		const recebido = {
+			titulo: String(formulario.get('titulo') || ''),
+			// O WhatsApp manda mensagens no "text"; alguns apps põem o texto no "url".
+			texto: [formulario.get('texto'), formulario.get('url')].filter(Boolean).join('\n'),
+			arquivos,
+		}
+		const cache = await caches.open(CACHE_COMPARTILHADO)
+		await cache.put('recebido', new Response(JSON.stringify(recebido), { headers: { 'Content-Type': 'application/json' } }))
+	} catch { /* o app avisa que não recebeu nada */ }
+	return Response.redirect(new URL('./#/receber', self.location).href, 303)
+}
 
 // Arquivos do app: sempre do lote guardado desta versão (rápido, funciona sem internet e
 // nunca mistura versões). A versão nova chega pelo service worker novo, que recarrega a tela.

@@ -109,3 +109,24 @@ test('regras do Firestore: versionadas, fechadas por padrão e só com os campos
 	}
 	assert.equal(JSON.parse(ler('firebase.json')).firestore.rules, 'firestore.rules')
 })
+
+test('manifesto: atalhos, compartilhar e capturas apontam para arquivos e rotas que existem', () => {
+	const manifesto = JSON.parse(ler('manifest.webmanifest'))
+	assert.equal(manifesto.theme_color, '#14161c', 'mesma cor do index.html e do app Android')
+	assert.equal(manifesto.background_color, '#14161c')
+	assert.equal(ler('android-app/capacitor.config.json').includes(manifesto.background_color), true)
+	assert.notEqual(manifesto.orientation, 'portrait', 'o tablet pode usar o app deitado')
+	const imagens = [...manifesto.shortcuts.flatMap(a => a.icons), ...manifesto.screenshots]
+	for (const imagem of imagens) assert.ok(fs.existsSync(new URL(`../${imagem.src}`, import.meta.url)), `${imagem.src} não existe`)
+	const rotas = ler('js/60-navegacao.js')
+	for (const atalho of manifesto.shortcuts) {
+		const rota = /^\.\/#\/([a-z-]+)$/.exec(atalho.url)?.[1]
+		assert.ok(rota && rotas.includes(`partes[0] === '${rota}'`), `atalho ${atalho.url} sem rota no app`)
+	}
+	const alvo = manifesto.share_target
+	assert.equal(alvo.method, 'POST')
+	assert.ok(ler('sw.js').includes(`url.pathname.endsWith('/${alvo.action.replace('./', '')}')`), 'o sw.js recebe o que é compartilhado')
+	assert.ok(ler('sw.js').includes(`getAll('${alvo.params.files[0].name}')`))
+	assert.ok(rotas.includes("partes[0] === 'receber'"))
+	assert.ok(manifesto.screenshots.some(s => s.form_factor === 'wide') && manifesto.screenshots.some(s => s.form_factor === 'narrow'))
+})

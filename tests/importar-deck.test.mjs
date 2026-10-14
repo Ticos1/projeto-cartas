@@ -59,3 +59,28 @@ test('com os dados reais: uma lista de Escarlate e Violeta sai inteira', () => {
 	assert.equal(r.naoAchadas.length, 0)
 	assert.equal(Object.keys(r.cartas).length, 3)
 })
+
+const compartilhado = recebido => JSON.parse(JSON.stringify(amb.avaliar(`entenderCompartilhado(${JSON.stringify(recebido)})`)))
+
+test('compartilhado: um backup do app (.json) vai para a importação de backup', () => {
+	const backup = JSON.stringify({ app: 'minha-colecao-tcg', versao: 2, cartas: { sv01: ['001'] } })
+	assert.deepEqual(compartilhado({ arquivos: [{ nome: 'colecao-tcg-2026-10-14.json', conteudo: backup }] }), { tipo: 'backup', texto: backup })
+})
+
+test('compartilhado: um arquivo de texto com a lista vira deck, com o nome do arquivo', () => {
+	const r = compartilhado({ arquivos: [{ nome: 'deck_do_pikachu.txt', conteudo: 'Pokémon: 4\n4 Pikachu ex SVI 57' }] })
+	assert.equal(r.tipo, 'deck')
+	assert.equal(r.nome, 'deck do pikachu')
+	assert.match(r.texto, /4 Pikachu ex SVI 57/)
+})
+
+test('compartilhado: mensagem de texto (WhatsApp) com a lista vira deck, com o título', () => {
+	assert.deepEqual(compartilhado({ titulo: 'Deck do João', texto: '4 Pikachu ex SVI 57\n2 Ordens do Chefe SVI 181' }), { tipo: 'deck', texto: '4 Pikachu ex SVI 57\n2 Ordens do Chefe SVI 181', nome: 'Deck do João' })
+})
+
+test('compartilhado: texto sem cartas, JSON que não é backup ou nada', () => {
+	assert.deepEqual(compartilhado({ texto: 'oi, tudo bem?' }), { tipo: 'nada' })
+	assert.deepEqual(compartilhado({ arquivos: [{ nome: 'x.json', conteudo: '{"outra":"coisa"}' }] }), { tipo: 'nada' })
+	assert.deepEqual(compartilhado({ arquivos: [{ nome: 'x.json', conteudo: '{quebrado' }] }), { tipo: 'nada' })
+	assert.deepEqual(compartilhado({}), { tipo: 'nada' })
+})
