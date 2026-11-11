@@ -6,6 +6,6 @@
     "@tesseract.js-data/eng": "1.0.0",
     "firebase": "11.10.0",
     "tesseract.js": "5.1.1",
-    "tesseract.js-core": "5.1.1"
+    "tesseract.js-core": "6.1.2"
   }
 }
